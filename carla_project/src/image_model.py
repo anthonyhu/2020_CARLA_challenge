@@ -109,7 +109,7 @@ class ImageModel(pl.LightningModule):
         target_heatmap_cam = self.to_heatmap(target, img)[:, None]
         out = self.net(torch.cat((img, target_heatmap_cam), 1))
 
-        return out, (target_cam, target_heatmap_cam)
+        return out, target_cam, target_heatmap_cam
 
     @torch.no_grad()
     def _get_labels(self, topdown, target):
@@ -127,7 +127,7 @@ class ImageModel(pl.LightningModule):
         lbl_cam[..., 0] = (lbl_cam[..., 0] / 256) * 2 - 1
         lbl_cam[..., 1] = (lbl_cam[..., 1] / 144) * 2 - 1
 
-        out, (target_cam, target_heatmap_cam) = self.forward(img, target)
+        out, target_cam, target_heatmap_cam = self.forward(img, target)
 
         alpha = torch.rand(out.shape[0], out.shape[1], 1).type_as(out)
         between = alpha * out + (1-alpha) * lbl_cam
@@ -151,7 +151,7 @@ class ImageModel(pl.LightningModule):
         lbl_cam_aug[..., 0] = (lbl_cam_aug[..., 0] / 256) * 2 - 1
         lbl_cam_aug[..., 1] = (lbl_cam_aug[..., 1] / 144) * 2 - 1
 
-        out_aug, (target_cam_aug, target_heatmap_cam_aug) = self.forward(img, target_aug)
+        out_aug, target_cam_aug, target_heatmap_cam_aug = self.forward(img, target_aug)
 
         alpha = torch.rand(out.shape[0], out.shape[1], 1).type_as(out)
         between_aug = alpha * out_aug + (1-alpha) * lbl_cam_aug
@@ -200,7 +200,7 @@ class ImageModel(pl.LightningModule):
         lbl_cam[..., 0] = (lbl_cam[..., 0] / 256) * 2 - 1
         lbl_cam[..., 1] = (lbl_cam[..., 1] / 144) * 2 - 1
 
-        out, (target_cam, target_heatmap_cam) = self.forward(img, target)
+        out, target_cam, target_heatmap_cam = self.forward(img, target)
         out_ctrl = self.controller(out)
         out_ctrl_gt = self.controller(lbl_cam)
 
@@ -226,7 +226,7 @@ class ImageModel(pl.LightningModule):
         lbl_cam_aug = self.converter.map_to_cam((lbl_map_aug + 1) / 2 * 256)
         lbl_cam_aug[..., 0] = (lbl_cam_aug[..., 0] / 256) * 2 - 1
         lbl_cam_aug[..., 1] = (lbl_cam_aug[..., 1] / 144) * 2 - 1
-        out_aug, (target_cam_aug, target_heatmap_cam_aug) = self.forward(img, target_aug)
+        out_aug, target_cam_aug, target_heatmap_cam_aug = self.forward(img, target_aug)
         out_ctrl_aug = self.controller(out_aug)
         out_ctrl_gt_aug = self.controller(lbl_cam_aug)
 
