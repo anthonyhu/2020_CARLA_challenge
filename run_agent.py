@@ -33,7 +33,6 @@ if __name__ == '__main__':
     parser.add_argument('--routes',
                         help='Name of the route to be executed. Point to the route_xml_file to be executed.',
                         required=True)
-    # TODO check what this flag does
     parser.add_argument('--scenarios', default='leaderboard/data/all_towns_traffic_scenarios_public.json',
                         help='Name of the scenario annotation file to be mixed with the route.')
     parser.add_argument('--repetitions',
@@ -48,7 +47,7 @@ if __name__ == '__main__':
     parser.add_argument("--track", type=str, default='SENSORS', help="Participation track: SENSORS, MAP")
     parser.add_argument('--resume', type=bool, default=False, help='Resume execution from last checkpoint?')
     parser.add_argument("--checkpoint", type=str,
-                        default='./simulation_results.json',
+                        default='./tmp.json',
                         help="Path to checkpoint used for saving statistics and resuming")
 
     arguments = parser.parse_args()

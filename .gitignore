@@ -1,3 +1,4 @@
 .idea/
 model_weights/
 sample_data/
+checkpoints/
