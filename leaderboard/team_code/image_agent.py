@@ -135,7 +135,7 @@ class ImageAgent(BaseAgent):
         target = torch.from_numpy(tick_data['target'])
         target = target[None].cuda()
 
-        points, (target_cam, _) = self.net.forward(img, target)
+        points, target_cam, _ = self.net.forward(img, target)
         points_cam = points.clone().cpu()
         points_cam[..., 0] = (points_cam[..., 0] + 1) / 2 * img.shape[-1]
         points_cam[..., 1] = (points_cam[..., 1] + 1) / 2 * img.shape[-2]
