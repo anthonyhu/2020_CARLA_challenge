@@ -97,13 +97,13 @@ class Policy(nn.Module):
         self.backbone = EfficientNet.from_pretrained(name)
         self.backbone._conv_stem = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, bias=False, padding=1)
 
-        self.control_net = nn.Sequential(nn.Conv2d(320, 512, kernel_size=1, bias=False),
-                                         nn.BatchNorm2d(512, momentum=0.01),
-                                         self.backbone._swish,
-                                         nn.AdaptiveAvgPool2d(output_size=1),
-                                         nn.Flatten(),
-                                         nn.Linear(512, out_channels),
-                                         )
+        self.output_net = nn.Sequential(nn.Conv2d(320, 512, kernel_size=1, bias=False),
+                                        nn.BatchNorm2d(512, momentum=0.01),
+                                        self.backbone._swish,
+                                        nn.AdaptiveAvgPool2d(output_size=1),
+                                        nn.Flatten(),
+                                        nn.Linear(512, out_channels),
+                                        )
         self.delete_unused_layers()
 
     def delete_unused_layers(self):
@@ -135,7 +135,7 @@ class Policy(nn.Module):
 
     def forward(self, x):
         x = self.get_features(x)  # get feature vector
-        x = self.control_net(x)
+        x = self.output_net(x)
         return x
 
 
@@ -209,6 +209,55 @@ class TransitionModel(nn.Module):
 
         output = self.output_head(x)
         return output
+
+
+class ActivatedNormLinear(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.module = nn.Sequential(nn.Linear(in_channels, out_channels),
+                                    nn.BatchNorm1d(out_channels),
+                                    nn.ReLU(inplace=True))
+
+    def forward(self, x):
+        return self.module(x)
+
+
+class RewardModel(Policy):
+    def __init__(self, in_channels=64, encoding_channels=16, name='efficientnet-b0', trajectory_length=10, n_actions=4):
+        super().__init__(in_channels=in_channels, out_channels=encoding_channels, name=name)
+
+        self.output_net = nn.Sequential(nn.Conv2d(320, 512, kernel_size=1, bias=False),
+                                        nn.BatchNorm2d(512, momentum=0.01),
+                                        self.backbone._swish,
+                                        nn.AdaptiveAvgPool2d(output_size=1),
+                                        nn.Flatten(),
+                                        nn.Linear(512, encoding_channels),
+                                        )
+
+        self.reward_net = nn.Sequential(ActivatedNormLinear(encoding_channels + trajectory_length*n_actions, 512),
+                                        ActivatedNormLinear(512, 256),
+                                        ActivatedNormLinear(256, 128),
+                                        ActivatedNormLinear(128, 64),
+                                        nn.Linear(64, 1),
+                                        )
+
+    def forward(self, state, trajectory):
+        """
+        Inputs
+        ------
+            state: torch.Tensor (B, C, H, W)
+            trajectory: torch.Tensor (B, T, 4)
+                predicted future trajectory of the ego car
+        """
+        state = self.get_features(state)  # get feature vector
+        state_encoding = self.output_net(state)
+
+        batch_size = trajectory.shape[0]
+        trajectory = trajectory.view(batch_size, -1)
+
+        joint_feature = torch.cat([state_encoding, trajectory], dim=-1)
+        reward = self.reward_net(joint_feature)
+        return reward
 
 
 class ModelBasedNet(pl.LightningModule):
@@ -452,16 +501,26 @@ def main(hparams):
 
 
 if __name__ == '__main__':
+    batch_size = 16
     state_n_channels = 64
     policy = Policy(in_channels=state_n_channels)
 
-    x = torch.zeros((1, state_n_channels, 512, 512))
-    action = torch.arange(4).float().view(1, 4)
+    x = torch.randn((batch_size, state_n_channels, 512, 512))
+    action = torch.randn(batch_size, 4)
     policy(x)
 
     transition_model = TransitionModel(in_channels=state_n_channels)
 
     x2 = transition_model(x, action)
+
+    trajectory_length = 10
+    n_actions = 4
+    reward_model = RewardModel(in_channels=64, encoding_channels=16, trajectory_length=trajectory_length,
+                               n_actions=n_actions)
+    trajectory = torch.randn((batch_size, trajectory_length, n_actions))
+
+    reward = reward_model(x2, trajectory)
+
 
 
 
