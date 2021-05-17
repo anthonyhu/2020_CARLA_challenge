@@ -1,3 +1,4 @@
+import os
 import uuid
 import argparse
 import pathlib
@@ -278,6 +279,8 @@ class WorldModel(pl.LightningModule):
     def validation_step(self, batch, batch_nb):
         loss = self.shared_step(batch, is_train=False)
 
+        return {'val_loss': sum(loss.values()).item()}
+
     def configure_optimizers(self):
         params = list(self.transition_model.parameters()) + list(self.policy.parameters())
         optimizer = torch.optim.Adam(
@@ -288,45 +291,46 @@ class WorldModel(pl.LightningModule):
 
     def train_dataloader(self):
         return get_dataset_sequential(
-            self.hparams.dataset_dir, is_train=True, batch_size=self.hparams.batch_size,
+            pathlib.Path(self.hparams.dataset_dir), is_train=True, batch_size=self.hparams.batch_size,
             num_workers=self.hparams.num_workers, sequence_length=self.hparams.sequence_length,
         )
 
     def val_dataloader(self):
         return get_dataset_sequential(
-            self.hparams.dataset_dir, is_train=False, batch_size=self.hparams.batch_size,
+            pathlib.Path(self.hparams.dataset_dir), is_train=False, batch_size=self.hparams.batch_size,
             num_workers=self.hparams.num_workers, sequence_length=self.hparams.sequence_length,
         )
 
 
 def main(hparams):
     model = WorldModel(hparams)
-    logger = WandbLogger(id=hparams.id, save_dir=str(hparams.save_dir), project='world_model')
-    checkpoint_callback = ModelCheckpoint(hparams.save_dir, save_top_k=1)
+    #logger = WandbLogger(id=hparams.id, save_dir=str(hparams.save_dir), project='world_model')
+    logger = pl.loggers.TensorBoardLogger(save_dir=str(hparams.save_dir))
+    checkpoint_callback = ModelCheckpoint(hparams.save_dir, save_last=True)
 
-    try:
-        resume_from_checkpoint = sorted(hparams.save_dir.glob('*.ckpt'))[-1]
-    except:
-        resume_from_checkpoint = None
+    # try:
+    #     resume_from_checkpoint = sorted(hparams.save_dir.glob('*.ckpt'))[-1]
+    # except:
+    #     resume_from_checkpoint = None
 
     trainer = pl.Trainer(
             gpus=-1, max_epochs=hparams.max_epochs,
-            resume_from_checkpoint=resume_from_checkpoint,
-            logger=logger, checkpoint_callback=checkpoint_callback)
+            resume_from_checkpoint=None, checkpoint_callback=checkpoint_callback,
+            logger=logger)
 
     trainer.fit(model)
 
-    wandb.save(str(hparams.save_dir / '*.ckpt'))
+    #wandb.save(str(hparams.save_dir / '*.ckpt'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--max_epochs', type=int, default=50)
-    parser.add_argument('--save_dir', type=pathlib.Path, default='checkpoints')
+    parser.add_argument('--save_dir', type=str, default='checkpoints')
     parser.add_argument('--id', type=str, default=uuid.uuid4().hex)
 
     # Data args.
-    parser.add_argument('--dataset_dir', type=pathlib.Path, required=True)
+    parser.add_argument('--dataset_dir', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', type=int, default=4)
 
@@ -338,7 +342,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=1e-7)
 
     parsed = parser.parse_args()
-    parsed.save_dir = parsed.save_dir / parsed.id
-    parsed.save_dir.mkdir(parents=True, exist_ok=True)
+    parsed.save_dir = os.path.join(parsed.save_dir, parsed.id)
+    os.makedirs(parsed.save_dir, exist_ok=True)
 
     main(parsed)
