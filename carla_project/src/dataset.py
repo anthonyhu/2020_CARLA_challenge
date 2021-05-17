@@ -70,6 +70,28 @@ def get_dataset(dataset_dir, is_train=True, batch_size=128, num_workers=4, sampl
     return Wrap(data, sampler, batch_size, 1000 if is_train else 100, num_workers)
 
 
+def get_dataset_sequential(dataset_dir, is_train=True, batch_size=128, num_workers=4, **kwargs):
+    data = list()
+    transform = transforms.Compose([
+        get_augmenter() if is_train else lambda x: x,
+        transforms.ToTensor()
+        ])
+
+    data_path = Path(dataset_dir) / 'train' if is_train else Path(dataset_dir) / 'val'
+
+    episodes = list(sorted(data_path.glob('*')))
+
+    for i, _dataset_dir in enumerate(episodes):
+        data.append(SequentialCarlaDataset(_dataset_dir, transform, **kwargs))
+    data = torch.utils.data.ConcatDataset(data)
+    print('%d frames.' % len(data))
+
+    shuffle = True if is_train else False
+    return torch.utils.data.DataLoader(
+        data, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True, drop_last=True
+    )
+
+
 def get_augmenter():
     seq = iaa.Sequential([
         iaa.Sometimes(0.05, iaa.GaussianBlur((0.0, 1.3))),
@@ -136,8 +158,6 @@ class CarlaDataset(Dataset):
         self.frames = list()
         self.measurements = pd.DataFrame([eval(x.read_text()) for x in measurements])
         self.converter = Converter()
-
-        print(dataset_dir)
 
         for image_path in sorted((dataset_dir / 'rgb').glob('*.png')):
             frame = str(image_path.stem)
@@ -218,6 +238,55 @@ class CarlaDataset(Dataset):
         actions = torch.FloatTensor(actions)
 
         return torch.cat((rgb, rgb_left, rgb_right)), topdown, points, target, actions, meta
+
+
+class SequentialCarlaDataset(CarlaDataset):
+    def __init__(self, dataset_dir, transform=transforms.ToTensor(), sequence_length=1):
+        super().__init__(dataset_dir, transform=transform)
+        self.sequence_length = sequence_length
+
+    def __len__(self):
+        return len(self.frames) - GAP * STEPS - (self.sequence_length - 1)
+
+    def __getitem__(self, index):
+        path = self.dataset_dir
+
+        data = {'image': [],
+                'bev': [],
+                'action': [],
+                }
+
+        for i in range(index, index + self.sequence_length):
+            frame = self.frames[i]
+
+            rgb = Image.open(path / 'rgb' / ('%s.png' % frame))
+            rgb = transforms.functional.to_tensor(rgb)
+
+            rgb_left = Image.open(path / 'rgb_left' / ('%s.png' % frame))
+            rgb_left = transforms.functional.to_tensor(rgb_left)
+
+            rgb_right = Image.open(path / 'rgb_right' / ('%s.png' % frame))
+            rgb_right = transforms.functional.to_tensor(rgb_right)
+
+            image = torch.stack([rgb_left, rgb, rgb_right])
+
+            topdown = Image.open(path / 'topdown' / ('%s.png' % frame))
+            topdown = topdown.crop((128, 0, 128 + 256, 256))
+            topdown = np.array(topdown)
+            topdown = preprocess_semantic(topdown)
+
+            actions = np.float32(self.measurements.iloc[i][['steer', 'target_speed']])
+            actions[np.isnan(actions)] = 0.0
+            actions = torch.FloatTensor(actions)
+
+            data['image'].append(image)
+            data['bev'].append(topdown)
+            data['action'].append(actions)
+
+        for key, value in data.items():
+            data[key] = torch.stack(value)
+
+        return data
 
 
 if __name__ == '__main__':

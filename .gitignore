@@ -2,3 +2,4 @@
 model_weights/
 sample_data/
 checkpoints/
+*.ipynb

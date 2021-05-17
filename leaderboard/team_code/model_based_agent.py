@@ -7,7 +7,7 @@ import carla
 
 from PIL import Image, ImageDraw
 
-from carla_project.src.model_based import ModelBasedNet
+from carla_project.src.world_model import ModelBasedNet
 from carla_project.src.converter import Converter
 
 from team_code.base_agent import BaseAgent

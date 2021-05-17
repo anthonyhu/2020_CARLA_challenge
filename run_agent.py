@@ -1,7 +1,7 @@
 import os
 import sys
-sys.path.append('/homes/ah2029/CARLA/PythonAPI/carla')
-sys.path.append('/homes/ah2029/CARLA/PythonAPI/carla/dist/carla-0.9.10-py3.7-linux-x86_64.egg')
+sys.path.append('/homes/ah2029/softwares/CARLA_0.9.10/PythonAPI/carla')
+sys.path.append('/homes/ah2029/softwares/CARLA_0.9.10/PythonAPI/carla/dist/carla-0.9.10-py3.7-linux-x86_64.egg')
 sys.path.append('leaderboard')
 sys.path.append('leaderboard/team_code')
 sys.path.append('scenario_runner')
