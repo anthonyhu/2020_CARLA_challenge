@@ -335,7 +335,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=4)
 
     # Model args
-    parser.add_argument('--sequence_length', type=int, default=6)
+    parser.add_argument('--sequence_length', type=int, default=5)
 
     # Optimizer args.
     parser.add_argument('--lr', type=float, default=3e-4)
