@@ -72,17 +72,13 @@ def get_dataset(dataset_dir, is_train=True, batch_size=128, num_workers=4, sampl
 
 def get_dataset_sequential(dataset_dir, is_train=True, batch_size=128, num_workers=4, **kwargs):
     data = list()
-    transform = transforms.Compose([
-        get_augmenter() if is_train else lambda x: x,
-        transforms.ToTensor()
-        ])
 
     data_path = Path(dataset_dir) / 'train' if is_train else Path(dataset_dir) / 'val'
 
     episodes = list(sorted(data_path.glob('*')))
 
     for i, _dataset_dir in enumerate(episodes):
-        data.append(SequentialCarlaDataset(_dataset_dir, transform, **kwargs))
+        data.append(SequentialCarlaDataset(_dataset_dir, **kwargs))
     data = torch.utils.data.ConcatDataset(data)
     print('%d frames.' % len(data))
 
@@ -240,10 +236,35 @@ class CarlaDataset(Dataset):
         return torch.cat((rgb, rgb_left, rgb_right)), topdown, points, target, actions, meta
 
 
-class SequentialCarlaDataset(CarlaDataset):
-    def __init__(self, dataset_dir, transform=transforms.ToTensor(), sequence_length=1):
-        super().__init__(dataset_dir, transform=transform)
+class SequentialCarlaDataset(Dataset):
+    def __init__(self, dataset_dir, sequence_length=1):
         self.sequence_length = sequence_length
+
+        dataset_dir = Path(dataset_dir)
+        measurements = list(sorted((dataset_dir / 'measurements').glob('*.json')))
+
+        self.dataset_dir = dataset_dir
+        self.frames = list()
+        pd_measurements = pd.DataFrame([eval(x.read_text()) for x in measurements])
+
+        self.labels = np.stack([pd_measurements['steer'].values.astype(np.float32),
+                                pd_measurements['target_speed'].values.astype(np.float32)],
+                               axis=-1)
+        self.labels[np.isnan(self.labels)] = 0.0
+
+        for image_path in sorted((dataset_dir / 'rgb').glob('*.png')):
+            frame = str(image_path.stem)
+
+            assert (dataset_dir / 'rgb_left' / ('%s.png' % frame)).exists()
+            assert (dataset_dir / 'rgb_right' / ('%s.png' % frame)).exists()
+            assert (dataset_dir / 'topdown' / ('%s.png' % frame)).exists()
+            assert int(frame) < len(self.labels)
+
+            self.frames.append(frame)
+
+        self.frames = np.asarray(self.frames)
+
+        assert len(self.frames) > 0, '%s has 0 frames.' % dataset_dir
 
     def __len__(self):
         return len(self.frames) - GAP * STEPS - (self.sequence_length - 1)
@@ -275,9 +296,7 @@ class SequentialCarlaDataset(CarlaDataset):
             topdown = np.array(topdown)
             topdown = preprocess_semantic(topdown)
 
-            actions = np.float32(self.measurements.iloc[i][['steer', 'target_speed']])
-            actions[np.isnan(actions)] = 0.0
-            actions = torch.FloatTensor(actions)
+            actions = torch.FloatTensor(self.labels[i])
 
             data['image'].append(image)
             data['bev'].append(topdown)
