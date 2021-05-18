@@ -2,11 +2,14 @@ import os
 import uuid
 import argparse
 import pathlib
+import time
+import socket
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
+from pytorch_lightning.plugins import DDPPlugin
 import wandb
 
 
@@ -304,9 +307,11 @@ class WorldModel(pl.LightningModule):
 
 def main(hparams):
     model = WorldModel(hparams)
-    #logger = WandbLogger(id=hparams.id, save_dir=str(hparams.save_dir), project='world_model')
-    logger = pl.loggers.TensorBoardLogger(save_dir=str(hparams.save_dir))
-    checkpoint_callback = ModelCheckpoint(hparams.save_dir, save_last=True)
+
+    save_dir = os.path.join(
+        hparams.save_dir, time.strftime('%d%B%Yat%H:%M:%S%Z') + '_' + socket.gethostname() + '_' + hparams.id
+    )
+    logger = pl.loggers.TensorBoardLogger(save_dir=save_dir)
 
     # try:
     #     resume_from_checkpoint = sorted(hparams.save_dir.glob('*.ckpt'))[-1]
@@ -314,20 +319,24 @@ def main(hparams):
     #     resume_from_checkpoint = None
 
     trainer = pl.Trainer(
-            gpus=-1, max_epochs=hparams.max_epochs,
-            resume_from_checkpoint=None, checkpoint_callback=checkpoint_callback,
-            logger=logger)
+        gpus=-1,
+        accelerator='ddp',
+        sync_batchnorm=True,
+        max_epochs=hparams.max_epochs,
+        resume_from_checkpoint=None,
+        logger=logger,
+        plugins=DDPPlugin(find_unused_parameters=True),
+        profiler='simple',
+    )
 
     trainer.fit(model)
-
-    #wandb.save(str(hparams.save_dir / '*.ckpt'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--max_epochs', type=int, default=50)
     parser.add_argument('--save_dir', type=str, default='checkpoints')
-    parser.add_argument('--id', type=str, default=uuid.uuid4().hex)
+    parser.add_argument('--id', type=str, default='debug')
 
     # Data args.
     parser.add_argument('--dataset_dir', type=str, required=True)
@@ -342,7 +351,5 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=1e-7)
 
     parsed = parser.parse_args()
-    parsed.save_dir = os.path.join(parsed.save_dir, parsed.id)
-    os.makedirs(parsed.save_dir, exist_ok=True)
 
     main(parsed)
