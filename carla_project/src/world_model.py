@@ -1,5 +1,4 @@
 import os
-import uuid
 import argparse
 import pathlib
 import time
@@ -10,11 +9,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from pytorch_lightning.plugins import DDPPlugin
-import wandb
 
 
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
 from efficientnet_pytorch import EfficientNet
 from torchvision.models.resnet import resnet18
 
@@ -238,15 +235,18 @@ class ActionLoss(nn.Module):
 
 
 class WorldModel(pl.LightningModule):
-    def __init__(self, hparams):
+    def __init__(self, config):
         super().__init__()
 
-        self.hparams = hparams
+        self.config = config
         self.transition_model = TransitionModel(in_channels=9, action_channels=2)
         self.policy = Policy(in_channels=9, out_channels=2)
 
         self.segmentation_loss = SegmentationLoss(use_top_k=True, top_k_ratio=0.5)
         self.policy_loss = ActionLoss(norm=1)
+
+        if self.config.use_reward:
+            self.reward_model = RewardModel(in_channels=9, trajectory_length=self.config.sequence_length, n_actions=2)
 
     def forward(self, batch):
         state = batch['bev']
@@ -286,35 +286,37 @@ class WorldModel(pl.LightningModule):
 
     def configure_optimizers(self):
         params = list(self.transition_model.parameters()) + list(self.policy.parameters())
+        if self.config.use_reward:
+            params = params + list(self.reward_model.parameters())
         optimizer = torch.optim.Adam(
-            params, lr=self.hparams.lr, weight_decay=self.hparams.weight_decay
+            params, lr=self.config.lr, weight_decay=self.config.weight_decay
         )
 
         return optimizer
 
     def train_dataloader(self):
         return get_dataset_sequential(
-            pathlib.Path(self.hparams.dataset_dir), is_train=True, batch_size=self.hparams.batch_size,
-            num_workers=self.hparams.num_workers, sequence_length=self.hparams.sequence_length,
+            pathlib.Path(self.config.dataset_dir), is_train=True, batch_size=self.config.batch_size,
+            num_workers=self.config.num_workers, sequence_length=self.config.sequence_length,
         )
 
     def val_dataloader(self):
         return get_dataset_sequential(
-            pathlib.Path(self.hparams.dataset_dir), is_train=False, batch_size=self.hparams.batch_size,
-            num_workers=self.hparams.num_workers, sequence_length=self.hparams.sequence_length,
+            pathlib.Path(self.config.dataset_dir), is_train=False, batch_size=self.config.batch_size,
+            num_workers=self.config.num_workers, sequence_length=self.config.sequence_length,
         )
 
 
-def main(hparams):
-    model = WorldModel(hparams)
+def main(config):
+    model = WorldModel(config)
 
     save_dir = os.path.join(
-        hparams.save_dir, time.strftime('%d%B%Yat%H:%M:%S%Z') + '_' + socket.gethostname() + '_' + hparams.id
+        config.save_dir, time.strftime('%d%B%Yat%H:%M:%S%Z') + '_' + socket.gethostname() + '_' + config.id
     )
     logger = pl.loggers.TensorBoardLogger(save_dir=save_dir)
 
     # try:
-    #     resume_from_checkpoint = sorted(hparams.save_dir.glob('*.ckpt'))[-1]
+    #     resume_from_checkpoint = sorted(config.save_dir.glob('*.ckpt'))[-1]
     # except:
     #     resume_from_checkpoint = None
 
@@ -322,7 +324,7 @@ def main(hparams):
         gpus=-1,
         accelerator='ddp',
         sync_batchnorm=True,
-        max_epochs=hparams.max_epochs,
+        max_epochs=config.max_epochs,
         resume_from_checkpoint=None,
         logger=logger,
         plugins=DDPPlugin(find_unused_parameters=True),
@@ -345,6 +347,7 @@ if __name__ == '__main__':
 
     # Model args
     parser.add_argument('--sequence_length', type=int, default=5)
+    parser.add_argument('--use_reward', type=bool, default=False)
 
     # Optimizer args.
     parser.add_argument('--lr', type=float, default=3e-4)
