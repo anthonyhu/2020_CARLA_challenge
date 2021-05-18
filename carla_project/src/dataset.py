@@ -80,7 +80,7 @@ def get_dataset_sequential(dataset_dir, is_train=True, batch_size=128, num_worke
     for i, _dataset_dir in enumerate(episodes):
         data.append(SequentialCarlaDataset(_dataset_dir, **kwargs))
     data = torch.utils.data.ConcatDataset(data)
-    print('%d frames.' % len(data))
+    print(f'{len(data)} elements in {data_path}')
 
     shuffle = True if is_train else False
     return torch.utils.data.DataLoader(

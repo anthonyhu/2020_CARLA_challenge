@@ -7,7 +7,7 @@ import carla
 
 from PIL import Image, ImageDraw
 
-from carla_project.src.world_model import ModelBasedNet
+from carla_project.src.world_model import WorldModel
 from carla_project.src.converter import Converter
 
 from team_code.base_agent import BaseAgent
@@ -49,9 +49,9 @@ class ModelBasedAgent(BaseAgent):
         super().setup(path_to_conf_file)
 
         self.converter = Converter()
-        self.net = ModelBasedNet.load_from_checkpoint(path_to_conf_file)
-        self.net.cuda()
-        self.net.eval()
+        self.world_model = WorldModel.load_from_checkpoint(path_to_conf_file)
+        self.world_model.cuda()
+        self.world_model.eval()
 
     def _init(self):
         super()._init()
@@ -83,78 +83,28 @@ class ModelBasedAgent(BaseAgent):
         return result
 
     @torch.no_grad()
-    def run_step_using_learned_controller(self, input_data, timestamp):
-        if not self.initialized:
-            self._init()
-
-        tick_data = self.tick(input_data)
-
-        img = torchvision.transforms.functional.to_tensor(tick_data['image'])
-        img = img[None].cuda()
-
-        target = torch.from_numpy(tick_data['target'])
-        target = target[None].cuda()
-
-        points, (target_cam, _) = self.net.forward(img, target)
-        control = self.net.controller(points).cpu().squeeze()
-
-        steer = control[0].item()
-        desired_speed = control[1].item()
-        speed = tick_data['speed']
-
-        brake = desired_speed < 0.4 or (speed / desired_speed) > 1.1
-
-        delta = np.clip(desired_speed - speed, 0.0, 0.25)
-        throttle = self._speed_controller.step(delta)
-        throttle = np.clip(throttle, 0.0, 0.75)
-        throttle = throttle if not brake else 0.0
-
-        control = carla.VehicleControl()
-        control.steer = steer
-        control.throttle = throttle
-        control.brake = float(brake)
-
-        if DEBUG:
-            debug_display(
-                    tick_data, target_cam.squeeze(), points.cpu().squeeze(),
-                    steer, throttle, brake, desired_speed,
-                    self.step)
-
-        return control
-
-    @torch.no_grad()
     def run_step(self, input_data, timestamp):
         if not self.initialized:
             self._init()
 
         tick_data = self.tick(input_data)
 
-        img = torchvision.transforms.functional.to_tensor(tick_data['image'])
-        img = img[None].cuda()
+        # img = torchvision.transforms.functional.to_tensor(tick_data['image'])
+        # img = img[None].cuda()
 
-        target = torch.from_numpy(tick_data['target'])
-        target = target[None].cuda()
+        bev = None
 
-        points, target_cam, _ = self.net.forward(img, target)
-        points_cam = points.clone().cpu()
-        points_cam[..., 0] = (points_cam[..., 0] + 1) / 2 * img.shape[-1]
-        points_cam[..., 1] = (points_cam[..., 1] + 1) / 2 * img.shape[-2]
-        points_cam = points_cam.squeeze()
-        points_world = self.converter.cam_to_world(points_cam).numpy()
+        action = self.world_model.policy(bev)
+        predicted_steering = action[0].item()
+        predicted_speed = action[1].item()
 
-        aim = (points_world[1] + points_world[0]) / 2.0
-        angle = np.degrees(np.pi / 2 - np.arctan2(aim[1], aim[0])) / 90
-        steer = self._turn_controller.step(angle)
+        steer = predicted_steering# self._turn_controller.step(predicted_steering)
         steer = np.clip(steer, -1.0, 1.0)
 
-        desired_speed = np.linalg.norm(points_world[0] - points_world[1]) * 2.0
-        # desired_speed *= (1 - abs(angle)) ** 2
-
         speed = tick_data['speed']
+        brake = predicted_speed < 0.1 or (speed / predicted_speed) > 1.2
 
-        brake = desired_speed < 0.4 or (speed / desired_speed) > 1.1
-
-        delta = np.clip(desired_speed - speed, 0.0, 0.25)
+        delta = np.clip(predicted_speed - speed, 0.0, 0.25)
         throttle = self._speed_controller.step(delta)
         throttle = np.clip(throttle, 0.0, 0.75)
         throttle = throttle if not brake else 0.0
@@ -171,4 +121,3 @@ class ModelBasedAgent(BaseAgent):
                     self.step)
 
         return control
-
