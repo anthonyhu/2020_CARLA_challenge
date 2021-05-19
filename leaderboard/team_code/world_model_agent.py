@@ -9,8 +9,9 @@ from PIL import Image, ImageDraw
 
 from carla_project.src.world_model import WorldModel
 from carla_project.src.converter import Converter
+from carla_project.src.dataset import preprocess_semantic
 
-from team_code.base_agent import BaseAgent
+from team_code.map_agent import MapAgent
 from team_code.pid_controller import PIDController
 
 
@@ -18,21 +19,15 @@ DEBUG = int(os.environ.get('HAS_DISPLAY', 0))
 
 
 def get_entry_point():
-    return 'ModelBasedAgent'
+    return 'WorldModelAgent'
 
 
-def debug_display(tick_data, target_cam, out, steer, throttle, brake, desired_speed, step):
+def debug_display(tick_data, bev, steer, throttle, brake, desired_speed, step):
     _rgb = Image.fromarray(tick_data['rgb'])
     _draw_rgb = ImageDraw.Draw(_rgb)
-    _draw_rgb.ellipse((target_cam[0]-3,target_cam[1]-3,target_cam[0]+3,target_cam[1]+3), (255, 255, 255))
 
-    for x, y in out:
-        x = (x + 1) / 2 * 256
-        y = (y + 1) / 2 * 144
-
-        _draw_rgb.ellipse((x-2, y-2, x+2, y+2), (0, 0, 255))
-
-    _combined = Image.fromarray(np.hstack([tick_data['rgb_left'], _rgb, tick_data['rgb_right']]))
+    _combined = np.hstack([tick_data['rgb_left'], _rgb, tick_data['rgb_right']])
+    _combined = Image.fromarray(_combined)
     _draw = ImageDraw.Draw(_combined)
     _draw.text((5, 10), 'Steer: %.3f' % steer)
     _draw.text((5, 30), 'Throttle: %.3f' % throttle)
@@ -44,7 +39,7 @@ def debug_display(tick_data, target_cam, out, steer, throttle, brake, desired_sp
     cv2.waitKey(1)
 
 
-class ModelBasedAgent(BaseAgent):
+class WorldModelAgent(MapAgent):
     def setup(self, path_to_conf_file):
         super().setup(path_to_conf_file)
 
@@ -92,11 +87,16 @@ class ModelBasedAgent(BaseAgent):
         # img = torchvision.transforms.functional.to_tensor(tick_data['image'])
         # img = img[None].cuda()
 
-        bev = None
+        # preprocess input
+        bev = Image.fromarray(tick_data['topdown'])
+        bev = bev.crop((128, 0, 128 + 256, 256))
+        bev = np.array(bev)
+        bev = preprocess_semantic(bev)
+        bev = bev.unsqueeze(0).cuda()
 
         action = self.world_model.policy(bev)
-        predicted_steering = action[0].item()
-        predicted_speed = action[1].item()
+        predicted_steering = action[0, 0].item()
+        predicted_speed = action[0, 1].item()
 
         steer = predicted_steering# self._turn_controller.step(predicted_steering)
         steer = np.clip(steer, -1.0, 1.0)
@@ -116,8 +116,8 @@ class ModelBasedAgent(BaseAgent):
 
         if DEBUG:
             debug_display(
-                    tick_data, target_cam.squeeze(), points.cpu().squeeze(),
-                    steer, throttle, brake, desired_speed,
+                    tick_data, bev[0].cpu().numpy(),
+                    steer, throttle, brake, predicted_speed,
                     self.step)
 
         return control

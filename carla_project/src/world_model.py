@@ -235,18 +235,19 @@ class ActionLoss(nn.Module):
 
 
 class WorldModel(pl.LightningModule):
-    def __init__(self, config):
+    def __init__(self, hparams):
         super().__init__()
 
-        self.config = config
+        self.hparams = hparams
+        self.config = hparams
         self.transition_model = TransitionModel(in_channels=9, action_channels=2)
         self.policy = Policy(in_channels=9, out_channels=2)
 
         self.segmentation_loss = SegmentationLoss(use_top_k=True, top_k_ratio=0.5)
         self.policy_loss = ActionLoss(norm=1)
 
-        if self.config.use_reward:
-            self.reward_model = RewardModel(in_channels=9, trajectory_length=self.config.sequence_length, n_actions=2)
+        #if self.config.use_reward:
+         #   self.reward_model = RewardModel(in_channels=9, trajectory_length=self.config.sequence_length, n_actions=2)
 
     def forward(self, batch):
         state = batch['bev']
@@ -337,7 +338,7 @@ def main(config):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--max_epochs', type=int, default=50)
-    parser.add_argument('--save_dir', type=str, default='checkpoints')
+    parser.add_argument('--save_dir', type=str, default='/data/cornucopia/ah2029/experiments/carla/transition_model')
     parser.add_argument('--id', type=str, default='debug')
 
     # Data args.
