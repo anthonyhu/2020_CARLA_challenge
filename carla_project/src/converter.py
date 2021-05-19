@@ -1,10 +1,12 @@
 import torch
 import numpy as np
 
+from carla_project.src.common import IMAGE_HEIGHT, IMAGE_WIDTH
+
 
 PIXELS_PER_WORLD = 5.5
-HEIGHT = 144
-WIDTH = 256
+HEIGHT = IMAGE_HEIGHT
+WIDTH = IMAGE_WIDTH
 FOV = 90
 MAP_SIZE = 256
 CAM_HEIGHT = 1.3

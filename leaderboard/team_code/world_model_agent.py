@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw
 from carla_project.src.world_model import WorldModel
 from carla_project.src.converter import Converter
 from carla_project.src.dataset import preprocess_semantic
+from carla_project.src.common import COLOR
 
 from team_code.map_agent import MapAgent
 from team_code.pid_controller import PIDController
@@ -27,6 +28,16 @@ def debug_display(tick_data, bev, steer, throttle, brake, desired_speed, step):
     _draw_rgb = ImageDraw.Draw(_rgb)
 
     _combined = np.hstack([tick_data['rgb_left'], _rgb, tick_data['rgb_right']])
+
+    bev_resized = COLOR[np.argmax(bev, axis=0)]
+    bev_h, bev_w = bev_resized.shape[:2]
+    # height = _combined.shape[0]
+    # width = int(bev_w * height / bev_h)
+    # bev_resized = bev_resized.resize((width, height), resample=Image.NEAREST)
+
+    bev_filler = np.zeros((bev_h, _combined.shape[1], 3), dtype=np.uint8)
+    bev_filler[:, 800:800 + bev_w] = bev_resized
+    _combined = np.vstack([_combined, bev_filler])
     _combined = Image.fromarray(_combined)
     _draw = ImageDraw.Draw(_combined)
     _draw.text((5, 10), 'Steer: %.3f' % steer)

@@ -6,6 +6,8 @@ import carla
 from leaderboard.autoagents import autonomous_agent
 from team_code.planner import RoutePlanner
 
+from carla_project.src.common import IMAGE_HEIGHT, IMAGE_WIDTH
+
 
 class BaseAgent(autonomous_agent.AutonomousAgent):
     def setup(self, path_to_conf_file):
@@ -33,21 +35,21 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
                     'type': 'sensor.camera.rgb',
                     'x': 1.3, 'y': 0.0, 'z': 1.3,
                     'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0,
-                    'width': 256, 'height': 144, 'fov': 90,
+                    'width': IMAGE_WIDTH, 'height': IMAGE_HEIGHT, 'fov': 90,
                     'id': 'rgb'
                     },
                 {
                     'type': 'sensor.camera.rgb',
                     'x': 1.2, 'y': -0.25, 'z': 1.3,
                     'roll': 0.0, 'pitch': 0.0, 'yaw': -45.0,
-                    'width': 256, 'height': 144, 'fov': 90,
+                    'width': IMAGE_WIDTH, 'height': IMAGE_HEIGHT, 'fov': 90,
                     'id': 'rgb_left'
                     },
                 {
                     'type': 'sensor.camera.rgb',
                     'x': 1.2, 'y': 0.25, 'z': 1.3,
                     'roll': 0.0, 'pitch': 0.0, 'yaw': 45.0,
-                    'width': 256, 'height': 144, 'fov': 90,
+                    'width': IMAGE_WIDTH, 'height': IMAGE_HEIGHT, 'fov': 90,
                     'id': 'rgb_right'
                     },
                 {

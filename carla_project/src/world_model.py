@@ -240,13 +240,16 @@ class WorldModel(pl.LightningModule):
 
         self.hparams = hparams
         self.config = hparams
-        self.transition_model = TransitionModel(in_channels=9, action_channels=2)
         self.policy = Policy(in_channels=9, out_channels=2)
 
-        self.segmentation_loss = SegmentationLoss(use_top_k=True, top_k_ratio=0.5)
+        if self.config.use_transition:
+            print('Enabled: Next state prediction')
+            self.transition_model = TransitionModel(in_channels=9, action_channels=2)
+            self.segmentation_loss = SegmentationLoss(use_top_k=True, top_k_ratio=0.5)
         self.policy_loss = ActionLoss(norm=1)
 
         #if self.config.use_reward:
+            #print('Enabled: Reward')
          #   self.reward_model = RewardModel(in_channels=9, trajectory_length=self.config.sequence_length, n_actions=2)
 
     def forward(self, batch):
@@ -257,19 +260,24 @@ class WorldModel(pl.LightningModule):
         predicted_actions = self.policy(input_policy)
         predicted_actions = predicted_actions.view(b, s, -1)
 
-        input_transition_states = state[:, :-1].contiguous().view(b*(s-1), c, h, w)
-        input_transition_actions = batch['action'][:, :-1].contiguous().view(b*(s-1), -1)
-        predicted_states = self.transition_model(input_transition_states, input_transition_actions)
-        predicted_states = predicted_states.view(b, s-1, c, h, w)
+        predicted_states = None
+        if self.config.use_transition:
+            input_transition_states = state[:, :-1].contiguous().view(b * (s - 1), c, h, w)
+            input_transition_actions = batch['action'][:, :-1].contiguous().view(b * (s - 1), -1)
+            predicted_states = self.transition_model(input_transition_states, input_transition_actions)
+            predicted_states = predicted_states.view(b, s-1, c, h, w)
 
         return predicted_actions, predicted_states
 
     def shared_step(self, batch, is_train=False):
         predicted_actions, predicted_states = self.forward(batch)
 
-        target_states = torch.argmax(batch['bev'][:, 1:], dim=-3)
-        future_prediction_loss = self.segmentation_loss(predicted_states, target_states)
         action_loss = self.policy_loss(predicted_actions, batch['action'])
+
+        future_prediction_loss = action_loss.new_zeros(1)
+        if self.config.use_transition:
+            target_states = torch.argmax(batch['bev'][:, 1:], dim=-3)
+            future_prediction_loss = self.segmentation_loss(predicted_states, target_states)
 
         return {'future_prediction': future_prediction_loss,
                 'action': action_loss
@@ -286,7 +294,10 @@ class WorldModel(pl.LightningModule):
         return {'val_loss': sum(loss.values()).item()}
 
     def configure_optimizers(self):
-        params = list(self.transition_model.parameters()) + list(self.policy.parameters())
+        params = list(self.policy.parameters())
+
+        if self.config.use_transition:
+            params = params + list(self.transition_model.parameters())
         if self.config.use_reward:
             params = params + list(self.reward_model.parameters())
         optimizer = torch.optim.Adam(
@@ -348,6 +359,7 @@ if __name__ == '__main__':
 
     # Model args
     parser.add_argument('--sequence_length', type=int, default=5)
+    parser.add_argument('--use_transition', type=bool, default=False)
     parser.add_argument('--use_reward', type=bool, default=False)
 
     # Optimizer args.

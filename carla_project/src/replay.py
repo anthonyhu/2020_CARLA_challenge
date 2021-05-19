@@ -8,7 +8,8 @@ import open3d as o3d
 import carla
 import cv2
 
-from .carla_env import Camera
+from carla_project.src.carla_env import Camera
+from carla_project.src.common import IMAGE_HEIGHT, IMAGE_WIDTH
 
 
 class Lidar(object):
@@ -122,7 +123,7 @@ class Rollout(object):
         # for i in range(16):
             # self.cameras[i] = Camera(self.world, vehicles[i], 256, 144, 90, 1.2, 0.0, 1.3, 0.0, 0.0)
 
-        self.cameras[16] = Camera(self.world, vehicles[16], 256, 144, 90, 1.2, 0.0, 1.3, 0.0, 0.0)
+        self.cameras[16] = Camera(self.world, vehicles[16], IMAGE_WIDTH, IMAGE_HEIGHT, 90, 1.2, 0.0, 1.3, 0.0, 0.0)
         self.lidars[16] = Lidar(self.world, vehicles[16])
 
         return self
