@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from pytorch_lightning.plugins import DDPPlugin
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
 
 from pytorch_lightning.loggers import WandbLogger
@@ -326,6 +327,7 @@ def main(config):
         config.save_dir, time.strftime('%d%B%Yat%H:%M:%S%Z') + '_' + socket.gethostname() + '_' + config.id
     )
     logger = pl.loggers.TensorBoardLogger(save_dir=save_dir)
+    model_checkpoint = ModelCheckpoint(save_dir, save_last=True)
 
     # try:
     #     resume_from_checkpoint = sorted(config.save_dir.glob('*.ckpt'))[-1]
@@ -339,6 +341,7 @@ def main(config):
         max_epochs=config.max_epochs,
         resume_from_checkpoint=None,
         logger=logger,
+        callbacks=model_checkpoint,
         plugins=DDPPlugin(find_unused_parameters=True),
         profiler='simple',
     )
