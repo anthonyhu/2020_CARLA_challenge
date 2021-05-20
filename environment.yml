@@ -26,3 +26,4 @@ dependencies:
     - py-trees==0.8.3
     - ephem==3.7.7.1
     - dictor==0.1.5
+    - scikit-video==1.1.11
