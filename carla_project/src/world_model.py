@@ -243,6 +243,12 @@ class WorldModel(pl.LightningModule):
         self.config = hparams
         self.policy = Policy(in_channels=9, out_channels=2)
 
+        ### TODO: Remove
+        if 'use_transition' not in self.config:
+            self.config['use_transition'] = True
+        from argparse import Namespace
+        #self.config = Namespace(**self.config)
+
         if self.config.use_transition:
             print('Enabled: Next state prediction')
             self.transition_model = TransitionModel(in_channels=9, action_channels=2)
@@ -356,7 +362,7 @@ if __name__ == '__main__':
     parser.add_argument('--id', type=str, default='debug')
 
     # Data args.
-    parser.add_argument('--dataset_dir', type=str, required=True)
+    parser.add_argument('--dataset_dir', type=str, default='/home/mifs/ah2029/datasets/carla/trainval')
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', type=int, default=4)
 

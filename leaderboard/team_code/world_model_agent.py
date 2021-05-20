@@ -23,7 +23,7 @@ def get_entry_point():
     return 'WorldModelAgent'
 
 
-def debug_display(tick_data, bev, steer, throttle, brake, desired_speed, step):
+def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_speed, step):
     _rgb = Image.fromarray(tick_data['rgb'])
     _draw_rgb = ImageDraw.Draw(_rgb)
 
@@ -31,12 +31,16 @@ def debug_display(tick_data, bev, steer, throttle, brake, desired_speed, step):
 
     bev_resized = COLOR[np.argmax(bev, axis=0)]
     bev_h, bev_w = bev_resized.shape[:2]
+
+    # next state
+    next_state_plot = COLOR[np.argmax(next_state, axis=0)]
     # height = _combined.shape[0]
     # width = int(bev_w * height / bev_h)
     # bev_resized = bev_resized.resize((width, height), resample=Image.NEAREST)
 
     bev_filler = np.zeros((bev_h, _combined.shape[1], 3), dtype=np.uint8)
-    bev_filler[:, 800:800 + bev_w] = bev_resized
+    bev_filler[:, 500:500 + bev_w] = bev_resized
+    bev_filler[:, 500 + bev_w:500 + 2*bev_w] = next_state_plot
     _combined = np.vstack([_combined, bev_filler])
     _combined = Image.fromarray(_combined)
     _draw = ImageDraw.Draw(_combined)
@@ -106,6 +110,9 @@ class WorldModelAgent(MapAgent):
         bev = bev.unsqueeze(0).cuda()
 
         action = self.world_model.policy(bev)
+
+        next_state = self.world_model.transition_model(bev, action)
+
         predicted_steering = action[0, 0].item()
         predicted_speed = action[0, 1].item()
 
@@ -127,7 +134,7 @@ class WorldModelAgent(MapAgent):
 
         if DEBUG:
             debug_display(
-                    tick_data, bev[0].cpu().numpy(),
+                    tick_data, bev[0].cpu().numpy(), next_state[0].cpu().numpy(),
                     steer, throttle, brake, predicted_speed,
                     self.step)
 
