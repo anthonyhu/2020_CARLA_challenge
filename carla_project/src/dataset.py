@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import imgaug.augmenters as iaa
 import pandas as pd
+from numpy import nan
 
 from torch.utils.data import Dataset
 from torchvision import transforms

@@ -6,18 +6,23 @@ from torchvision.models.resnet import resnet18
 
 
 class Policy(nn.Module):
-    def __init__(self, in_channels=64, out_channels=4, name='efficientnet-b0'):
+    def __init__(self, in_channels=64, out_channels=4, command_channels=6, name='efficientnet-b0'):
         super().__init__()
         self.backbone = EfficientNet.from_pretrained(name)
-        self.backbone._conv_stem = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, bias=False, padding=1)
+        self.backbone._conv_stem = nn.Conv2d(
+            in_channels + command_channels, 32, kernel_size=3, stride=2, bias=False, padding=1
+        )
 
         self.output_net = nn.Sequential(nn.Conv2d(320, 512, kernel_size=1, bias=False),
                                         nn.BatchNorm2d(512, momentum=0.01),
                                         self.backbone._swish,
                                         nn.AdaptiveAvgPool2d(output_size=1),
                                         nn.Flatten(),
-                                        nn.Linear(512, out_channels),
+                                        ActivatedNormLinear(512, 256),
+                                        ActivatedNormLinear(256, 128),
+                                        ActivatedNormLinear(128, 64),
                                         )
+        self.last_layer = nn.Linear(64 + command_channels, out_channels)
         self.delete_unused_layers()
 
     def delete_unused_layers(self):
@@ -47,9 +52,15 @@ class Policy(nn.Module):
 
         return x
 
-    def forward(self, x):
+    def forward(self, x, route_commands):
+        # concatenate route_commands
+        b, c, h, w = x.shape
+        route_commands_1 = route_commands.view(b, -1, 1, 1).expand(-1, -1, h, w)
+        x = torch.cat([x, route_commands_1], dim=1)
+
         x = self.get_features(x)  # get feature vector
         x = self.output_net(x)
+        x = self.last_layer(torch.cat([x, route_commands], dim=-1))
         return x
 
 

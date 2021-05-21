@@ -22,7 +22,9 @@ class WorldModelTrainer(pl.LightningModule):
         self.dataset_path = os.path.join(self.config.DATASET.DATAROOT, self.config.DATASET.VERSION)
 
         # Model
-        self.policy = Policy(in_channels=self.config.MODEL.IN_CHANNELS, out_channels=self.config.MODEL.ACTION_DIM)
+        self.policy = Policy(in_channels=self.config.MODEL.IN_CHANNELS, out_channels=self.config.MODEL.ACTION_DIM,
+                             command_channels=self.config.MODEL.COMMAND_DIM
+                             )
 
         if self.config.MODEL.TRANSITION.ENABLED:
             print('Enabled: Next state prediction')
@@ -49,7 +51,10 @@ class WorldModelTrainer(pl.LightningModule):
         b, s, c, h, w = state.shape
 
         input_policy = state.view(b*s, c, h, w)
-        predicted_actions = self.policy(input_policy)
+        # substract 1 because commands start at 1.
+        route_command = torch.nn.functional.one_hot(batch['route_command'].squeeze(-1) - 1, self.config.MODEL.COMMAND_DIM)
+        route_command = route_command.view(b*s, -1)
+        predicted_actions = self.policy(input_policy, route_command)
         predicted_actions = predicted_actions.view(b, s, -1)
 
         predicted_states = None

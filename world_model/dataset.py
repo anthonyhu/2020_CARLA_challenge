@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
+from numpy import nan
 
 from carla_project.src.common import COLOR
 from world_model.utils import preprocess_bev_state
@@ -19,6 +20,7 @@ N_CLASSES = len(COLOR)
 class SequentialCarlaDataset(Dataset):
     def __init__(self, dataset_dir, sequence_length=1, skip_beginning=10):
         self.sequence_length = sequence_length
+        self.skip_beginning = skip_beginning
 
         dataset_dir = Path(dataset_dir)
         measurements = list(sorted((dataset_dir / 'measurements').glob('*.json')))
@@ -31,6 +33,8 @@ class SequentialCarlaDataset(Dataset):
                                 pd_measurements['target_speed'].values.astype(np.float32)],
                                axis=-1)
         self.labels[np.isnan(self.labels)] = 0.0
+
+        self.route_commands = pd_measurements['command'].values
 
         for image_path in sorted((dataset_dir / 'rgb').glob('*.png')):
             frame = str(image_path.stem)
@@ -46,6 +50,7 @@ class SequentialCarlaDataset(Dataset):
 
         self.frames = self.frames[skip_beginning:]
         self.labels = self.labels[skip_beginning:]
+        self.route_commands = self.route_commands[skip_beginning:]
 
         assert len(self.frames) > 0, '%s has 0 frames.' % dataset_dir
 
@@ -58,6 +63,7 @@ class SequentialCarlaDataset(Dataset):
         data = {'image': [],
                 'bev': [],
                 'action': [],
+                'route_command': [],
                 }
 
         for i in range(index, index + self.sequence_length):
@@ -82,6 +88,7 @@ class SequentialCarlaDataset(Dataset):
             data['image'].append(image)
             data['bev'].append(topdown)
             data['action'].append(actions)
+            data['route_command'].append(torch.LongTensor([self.route_commands[i]]))
 
         for key, value in data.items():
             data[key] = torch.stack(value)

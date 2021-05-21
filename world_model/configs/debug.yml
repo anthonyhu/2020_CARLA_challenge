@@ -3,6 +3,7 @@ _BASE_: 'policy_only.yml'
 LOG_DIR: '/data/cornucopia/ah2029/experiments/carla/debug'
 TAG: 'debug'
 
+GPUS: [0]
 EPOCHS: 2
 LOGGING_INTERVAL: 10
 
