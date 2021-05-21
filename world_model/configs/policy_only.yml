@@ -1,0 +1,17 @@
+_BASE_: 'baseline.yml'
+
+TAG: 'policy_only'
+
+GPUS: [0, 1]
+
+BATCHSIZE: 64
+EPOCHS: 100
+
+SEQUENCE_LENGTH: 1
+
+MODEL:
+  TRANSITION:
+    ENABLED: False
+
+OPTIMIZER:
+  LR: 1e-3

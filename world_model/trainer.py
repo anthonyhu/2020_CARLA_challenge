@@ -42,7 +42,7 @@ class WorldModelTrainer(pl.LightningModule):
                 n_actions=self.config.MODEL.ACTION_DIM,
             )
 
-        set_bn_momentum(self, self.cfg.MODEL.BN_MOMENTUM)
+        set_bn_momentum(self, self.config.MODEL.BN_MOMENTUM)
 
     def forward(self, batch):
         state = batch['bev']
