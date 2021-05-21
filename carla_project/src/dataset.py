@@ -8,12 +8,10 @@ import pandas as pd
 from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
-from numpy import nan
 
 from .converter import Converter, PIXELS_PER_WORLD
 from .dataset_wrapper import Wrap
 from . import common
-
 
 # Reproducibility.
 np.random.seed(0)
@@ -70,25 +68,6 @@ def get_dataset(dataset_dir, is_train=True, batch_size=128, num_workers=4, sampl
     return Wrap(data, sampler, batch_size, 1000 if is_train else 100, num_workers)
 
 
-def get_dataset_sequential(dataset_dir, is_train=True, batch_size=128, num_workers=4, **kwargs):
-    data = list()
-
-    data_path = Path(dataset_dir) / 'train' if is_train else Path(dataset_dir) / 'val'
-
-    episodes = list(sorted(data_path.glob('*')))
-
-    for i, _dataset_dir in enumerate(episodes):
-        data.append(SequentialCarlaDataset(_dataset_dir, **kwargs))
-    data = torch.utils.data.ConcatDataset(data)
-    print(f'{len(data)} elements in {data_path}')
-
-    shuffle = True if is_train else False
-
-    return torch.utils.data.DataLoader(
-        data, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True, drop_last=True
-    )
-
-
 def get_augmenter():
     seq = iaa.Sequential([
         iaa.Sometimes(0.05, iaa.GaussianBlur((0.0, 1.3))),
@@ -135,14 +114,6 @@ def make_heatmap(size, pt, sigma=8):
     img[img_y[0]:img_y[1], img_x[0]:img_x[1]] = g[g_y[0]:g_y[1], g_x[0]:g_x[1]]
 
     return img
-
-
-def preprocess_semantic(semantic_np):
-    topdown = common.CONVERTER[semantic_np]
-    topdown = torch.LongTensor(topdown)
-    topdown = torch.nn.functional.one_hot(topdown, N_CLASSES).permute(2, 0, 1).float()
-
-    return topdown
 
 
 class CarlaDataset(Dataset):
@@ -235,78 +206,6 @@ class CarlaDataset(Dataset):
         actions = torch.FloatTensor(actions)
 
         return torch.cat((rgb, rgb_left, rgb_right)), topdown, points, target, actions, meta
-
-
-class SequentialCarlaDataset(Dataset):
-    def __init__(self, dataset_dir, sequence_length=1):
-        self.sequence_length = sequence_length
-
-        dataset_dir = Path(dataset_dir)
-        measurements = list(sorted((dataset_dir / 'measurements').glob('*.json')))
-
-        self.dataset_dir = dataset_dir
-        self.frames = list()
-        pd_measurements = pd.DataFrame([eval(x.read_text()) for x in measurements])
-
-        self.labels = np.stack([pd_measurements['steer'].values.astype(np.float32),
-                                pd_measurements['target_speed'].values.astype(np.float32)],
-                               axis=-1)
-        self.labels[np.isnan(self.labels)] = 0.0
-
-        for image_path in sorted((dataset_dir / 'rgb').glob('*.png')):
-            frame = str(image_path.stem)
-
-            assert (dataset_dir / 'rgb_left' / ('%s.png' % frame)).exists()
-            assert (dataset_dir / 'rgb_right' / ('%s.png' % frame)).exists()
-            assert (dataset_dir / 'topdown' / ('%s.png' % frame)).exists()
-            assert int(frame) < len(self.labels)
-
-            self.frames.append(frame)
-
-        self.frames = np.asarray(self.frames)
-
-        assert len(self.frames) > 0, '%s has 0 frames.' % dataset_dir
-
-    def __len__(self):
-        return len(self.frames) - GAP * STEPS - (self.sequence_length - 1)
-
-    def __getitem__(self, index):
-        path = self.dataset_dir
-
-        data = {'image': [],
-                'bev': [],
-                'action': [],
-                }
-
-        for i in range(index, index + self.sequence_length):
-            frame = self.frames[i]
-
-            rgb = Image.open(path / 'rgb' / ('%s.png' % frame))
-            rgb = transforms.functional.to_tensor(rgb)
-
-            rgb_left = Image.open(path / 'rgb_left' / ('%s.png' % frame))
-            rgb_left = transforms.functional.to_tensor(rgb_left)
-
-            rgb_right = Image.open(path / 'rgb_right' / ('%s.png' % frame))
-            rgb_right = transforms.functional.to_tensor(rgb_right)
-
-            image = torch.stack([rgb_left, rgb, rgb_right])
-
-            topdown = Image.open(path / 'topdown' / ('%s.png' % frame))
-            topdown = topdown.crop((128, 0, 128 + 256, 256))
-            topdown = np.array(topdown)
-            topdown = preprocess_semantic(topdown)
-
-            actions = torch.FloatTensor(self.labels[i])
-
-            data['image'].append(image)
-            data['bev'].append(topdown)
-            data['action'].append(actions)
-
-        for key, value in data.items():
-            data[key] = torch.stack(value)
-
-        return data
 
 
 if __name__ == '__main__':

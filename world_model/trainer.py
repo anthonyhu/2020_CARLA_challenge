@@ -5,9 +5,10 @@ import torch
 import pytorch_lightning as pl
 
 from world_model.config import get_cfg
-from carla_project.src.dataset import get_dataset_sequential
+from world_model.dataset import get_dataset_sequential
 from world_model.models import Policy, TransitionModel, RewardModel
 from world_model.losses import ActionLoss, SegmentationLoss
+from world_model.utils import set_bn_momentum
 
 
 class WorldModelTrainer(pl.LightningModule):
@@ -40,6 +41,8 @@ class WorldModelTrainer(pl.LightningModule):
                 trajectory_length=self.config.SEQUENCE_LENGTH,
                 n_actions=self.config.MODEL.ACTION_DIM,
             )
+
+        set_bn_momentum(self, self.cfg.MODEL.BN_MOMENTUM)
 
     def forward(self, batch):
         state = batch['bev']

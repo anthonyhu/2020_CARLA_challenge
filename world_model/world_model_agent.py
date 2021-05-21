@@ -7,8 +7,8 @@ import carla
 from PIL import Image, ImageDraw
 
 from world_model.trainer import WorldModelTrainer
+from world_model.utils import preprocess_bev_state
 from carla_project.src.converter import Converter
-from carla_project.src.dataset import preprocess_semantic
 from carla_project.src.common import COLOR
 
 from team_code.map_agent import MapAgent
@@ -104,10 +104,7 @@ class WorldModelAgent(MapAgent):
 
         # preprocess input
         bev = Image.fromarray(tick_data['topdown'])
-        bev = bev.crop((128, 0, 128 + 256, 256))
-        bev = np.array(bev)
-        bev = preprocess_semantic(bev)
-        bev = bev.unsqueeze(0).cuda()
+        bev = preprocess_bev_state(bev).unsqueeze(0).cuda()
 
         action = self.world_model.policy(bev)
 
