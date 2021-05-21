@@ -83,6 +83,7 @@ def get_dataset_sequential(dataset_dir, is_train=True, batch_size=128, num_worke
     print(f'{len(data)} elements in {data_path}')
 
     shuffle = True if is_train else False
+
     return torch.utils.data.DataLoader(
         data, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True, drop_last=True
     )

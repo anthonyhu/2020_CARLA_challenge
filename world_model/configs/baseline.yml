@@ -1,0 +1,14 @@
+LOG_DIR: '/data/cornucopia/ah2029/experiments/carla/baseline'
+TAG: 'baseline'
+
+GPUS: [0, 1]
+
+BATCHSIZE: 64
+PRECISION: 32
+
+SEQUENCE_LENGTH: 6
+
+MODEL:
+  BN_MOMENTUM: 0.05
+
+N_WORKERS: 10

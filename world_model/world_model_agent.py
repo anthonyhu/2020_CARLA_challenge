@@ -6,7 +6,7 @@ import carla
 
 from PIL import Image, ImageDraw
 
-from world_model.world_model import WorldModel
+from world_model.trainer import WorldModelTrainer
 from carla_project.src.converter import Converter
 from carla_project.src.dataset import preprocess_semantic
 from carla_project.src.common import COLOR
@@ -59,7 +59,7 @@ class WorldModelAgent(MapAgent):
         super().setup(path_to_conf_file)
 
         self.converter = Converter()
-        self.world_model = WorldModel.load_from_checkpoint(path_to_conf_file)
+        self.world_model = WorldModelTrainer.load_from_checkpoint(path_to_conf_file)
         self.world_model.cuda()
         self.world_model.eval()
 
