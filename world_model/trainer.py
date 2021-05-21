@@ -51,9 +51,8 @@ class WorldModelTrainer(pl.LightningModule):
         b, s, c, h, w = state.shape
 
         input_policy = state.view(b*s, c, h, w)
-        # substract 1 because commands start at 1.
-        route_command = torch.nn.functional.one_hot(batch['route_command'].squeeze(-1) - 1, self.config.MODEL.COMMAND_DIM)
-        route_command = route_command.view(b*s, -1)
+
+        route_command = batch['route_command'].view(b * s, -1)
         predicted_actions = self.policy(input_policy, route_command)
         predicted_actions = predicted_actions.view(b, s, -1)
 

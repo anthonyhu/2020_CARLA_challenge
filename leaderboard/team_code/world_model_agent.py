@@ -22,7 +22,7 @@ def get_entry_point():
     return 'WorldModelAgent'
 
 
-def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_speed, step):
+def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_speed, command_name, step):
     _rgb = Image.fromarray(tick_data['rgb'])
     _draw_rgb = ImageDraw.Draw(_rgb)
 
@@ -49,6 +49,7 @@ def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_sp
     _draw.text((5, 50), 'Brake: %s' % brake)
     _draw.text((5, 70), 'Speed: %.3f' % tick_data['speed'])
     _draw.text((5, 90), 'Desired: %.3f' % desired_speed)
+    _draw.text((5, 110), f'Command {command_name}')
 
     cv2.imshow('map', cv2.cvtColor(np.array(_combined), cv2.COLOR_BGR2RGB))
     cv2.waitKey(1)
@@ -94,12 +95,14 @@ class WorldModelAgent(MapAgent):
         bev = Image.fromarray(tick_data['topdown'])
         bev = preprocess_bev_state(bev).unsqueeze(0).cuda()
         # route command
-        route_command = torch.LongTensor(tick_data['command']).unsqueeze(0).cuda()
-        print(route_command.shape)
+        route_command = torch.LongTensor([tick_data['command'].value]).unsqueeze(0).cuda()
 
         action = self.world_model.policy(bev, route_command)
 
-        next_state = self.world_model.transition_model(bev, action)
+        if self.world_model.config.MODEL.TRANSITION.ENABLED:
+            next_state = self.world_model.transition_model(bev, action)
+        else:
+            next_state = torch.zeros_like(bev)
 
         predicted_steering = action[0, 0].item()
         predicted_speed = action[0, 1].item()
@@ -123,7 +126,7 @@ class WorldModelAgent(MapAgent):
         if DEBUG:
             debug_display(
                     tick_data, bev[0].cpu().numpy(), next_state[0].cpu().numpy(),
-                    steer, throttle, brake, predicted_speed,
+                    steer, throttle, brake, predicted_speed, tick_data['command'].name,
                     self.step)
 
         return control

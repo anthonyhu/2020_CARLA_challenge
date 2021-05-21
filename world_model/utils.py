@@ -27,12 +27,3 @@ def preprocess_bev_state(x):
     x = np.array(x)
     x = preprocess_semantic(x)
     return x[..., 128:, 64:-64]
-
-# https://github.com/carla-simulator/carla/blob/master/PythonAPI/carla/agents/navigation/local_planner.py
-ROUTE_COMMANDS = {1: 'LEFT',
-                  2: 'RIGHT',
-                  3: 'STRAIGHT',
-                  4: 'LANEFOLLOW',
-                  5: 'CHANGELANELEFT',
-                  6: 'CHANGELANERIGHT',
-                  }

@@ -3,3 +3,5 @@ model_weights/
 sample_data/
 checkpoints/
 *.ipynb
+
+__pycache__/

@@ -8,6 +8,7 @@ from torchvision.models.resnet import resnet18
 class Policy(nn.Module):
     def __init__(self, in_channels=64, out_channels=4, command_channels=6, name='efficientnet-b0'):
         super().__init__()
+        self.command_channels = command_channels
         self.backbone = EfficientNet.from_pretrained(name)
         self.backbone._conv_stem = nn.Conv2d(
             in_channels + command_channels, 32, kernel_size=3, stride=2, bias=False, padding=1
@@ -55,6 +56,10 @@ class Policy(nn.Module):
     def forward(self, x, route_commands):
         # concatenate route_commands
         b, c, h, w = x.shape
+
+        # substract 1 because commands start at 1.
+        route_commands = torch.nn.functional.one_hot(route_commands.squeeze(-1) - 1, self.command_channels)
+
         route_commands_1 = route_commands.view(b, -1, 1, 1).expand(-1, -1, h, w)
         x = torch.cat([x, route_commands_1], dim=1)
 
