@@ -27,7 +27,8 @@ def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_sp
     _rgb = Image.fromarray(tick_data['rgb'])
     _draw_rgb = ImageDraw.Draw(_rgb)
 
-    _combined = np.hstack([tick_data['rgb_left'], _rgb, tick_data['rgb_right']])
+    _combined = np.hstack([_rgb, np.zeros_like(_rgb), np.zeros_like(_rgb)])
+    #np.hstack([tick_data['rgb_left'], _rgb, tick_data['rgb_right']])
 
     bev_resized = COLOR[np.argmax(bev, axis=0)]
     bev_h, bev_w = bev_resized.shape[:2]
@@ -39,8 +40,8 @@ def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_sp
     # bev_resized = bev_resized.resize((width, height), resample=Image.NEAREST)
 
     bev_filler = np.zeros((bev_h, _combined.shape[1], 3), dtype=np.uint8)
-    bev_filler[:, 500:500 + bev_w] = bev_resized
-    bev_filler[:, 500 + bev_w:500 + 2*bev_w] = next_state_plot
+    bev_filler[:, :bev_w] = bev_resized
+    bev_filler[:, bev_w:2*bev_w] = next_state_plot
     _combined = np.vstack([_combined, bev_filler])
     _combined = Image.fromarray(_combined)
     _draw = ImageDraw.Draw(_combined)
@@ -71,7 +72,7 @@ class WorldModelAgent(MapAgent):
 
     def tick(self, input_data):
         result = super().tick(input_data)
-        result['image'] = np.concatenate(tuple(result[x] for x in ['rgb', 'rgb_left', 'rgb_right']), -1)
+        result['image'] = result['rgb']#np.concatenate(tuple(result[x] for x in ['rgb', 'rgb_left', 'rgb_right']), -1)
 
         theta = result['compass']
         theta = 0.0 if np.isnan(theta) else theta

@@ -1,5 +1,4 @@
 import os
-import argparse
 import pathlib
 import time
 import socket
@@ -17,6 +16,7 @@ from efficientnet_pytorch import EfficientNet
 from torchvision.models.resnet import resnet18
 
 from carla_project.src.dataset import get_dataset_sequential
+from carla_project.src.config import get_parser, get_cfg
 
 
 class Policy(nn.Module):
@@ -247,7 +247,7 @@ class WorldModel(pl.LightningModule):
         if 'use_transition' not in self.config:
             self.config['use_transition'] = True
         from argparse import Namespace
-        #self.config = Namespace(**self.config)
+        self.config = Namespace(**self.config)
 
         if self.config.use_transition:
             print('Enabled: Next state prediction')
@@ -356,25 +356,28 @@ def main(config):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--max_epochs', type=int, default=50)
-    parser.add_argument('--save_dir', type=str, default='/data/cornucopia/ah2029/experiments/carla/transition_model')
-    parser.add_argument('--id', type=str, default='debug')
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--max_epochs', type=int, default=50)
+    # parser.add_argument('--save_dir', type=str, default='/data/cornucopia/ah2029/experiments/carla/transition_model')
+    # parser.add_argument('--id', type=str, default='debug')
+    #
+    # # Data args.
+    # parser.add_argument('--dataset_dir', type=str, default='/home/mifs/ah2029/datasets/carla/trainval')
+    # parser.add_argument('--batch_size', type=int, default=8)
+    # parser.add_argument('--num_workers', type=int, default=4)
+    #
+    # # Model args
+    # parser.add_argument('--sequence_length', type=int, default=5)
+    # parser.add_argument('--use_transition', type=bool, default=False)
+    # parser.add_argument('--use_reward', type=bool, default=False)
+    #
+    # # Optimizer args.
+    # parser.add_argument('--lr', type=float, default=3e-4)
+    # parser.add_argument('--weight_decay', type=float, default=1e-7)
+    #
+    # parsed = parser.parse_args()
 
-    # Data args.
-    parser.add_argument('--dataset_dir', type=str, default='/home/mifs/ah2029/datasets/carla/trainval')
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--num_workers', type=int, default=4)
-
-    # Model args
-    parser.add_argument('--sequence_length', type=int, default=5)
-    parser.add_argument('--use_transition', type=bool, default=False)
-    parser.add_argument('--use_reward', type=bool, default=False)
-
-    # Optimizer args.
-    parser.add_argument('--lr', type=float, default=3e-4)
-    parser.add_argument('--weight_decay', type=float, default=1e-7)
-
-    parsed = parser.parse_args()
-
-    main(parsed)
+    args = get_parser().parse_args()
+    cfg = get_cfg(args)
+    #
+    # main(cfg.convert_to_dict())

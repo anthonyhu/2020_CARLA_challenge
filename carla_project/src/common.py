@@ -1,6 +1,6 @@
 import numpy as np
 
-IMAGE_HEIGHT, IMAGE_WIDTH = 256, 512
+IMAGE_HEIGHT, IMAGE_WIDTH = 144, 256 #256, 512
 
 
 CONVERTER = np.uint8([
