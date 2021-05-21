@@ -16,7 +16,7 @@ from efficientnet_pytorch import EfficientNet
 from torchvision.models.resnet import resnet18
 
 from carla_project.src.dataset import get_dataset_sequential
-from carla_project.src.config import get_parser, get_cfg
+from world_model.config import get_parser, get_cfg
 
 
 class Policy(nn.Module):

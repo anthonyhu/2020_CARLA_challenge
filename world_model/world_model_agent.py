@@ -2,12 +2,11 @@ import os
 import numpy as np
 import cv2
 import torch
-import torchvision
 import carla
 
 from PIL import Image, ImageDraw
 
-from carla_project.src.world_model import WorldModel
+from world_model.world_model import WorldModel
 from carla_project.src.converter import Converter
 from carla_project.src.dataset import preprocess_semantic
 from carla_project.src.common import COLOR
