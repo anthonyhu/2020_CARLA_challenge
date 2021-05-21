@@ -71,24 +71,12 @@ class WorldModelAgent(MapAgent):
 
     def tick(self, input_data):
         result = super().tick(input_data)
-        result['image'] = result['rgb']#np.concatenate(tuple(result[x] for x in ['rgb', 'rgb_left', 'rgb_right']), -1)
-
-        theta = result['compass']
-        theta = 0.0 if np.isnan(theta) else theta
-        theta = theta + np.pi / 2
-        R = np.array([
-            [np.cos(theta), -np.sin(theta)],
-            [np.sin(theta),  np.cos(theta)],
-            ])
-
+        result['image'] = result['rgb'] #np.concatenate(tuple(result[x] for x in ['rgb', 'rgb_left', 'rgb_right']), -1)
         gps = self._get_position(result)
-        far_node, _ = self._command_planner.run_step(gps)
-        target = R.T.dot(far_node - gps)
-        target *= 5.5
-        target += [128, 256]
-        target = np.clip(target, 0, 256)
 
-        result['target'] = target
+        # Route command
+        near_node, near_command = self._waypoint_planner.run_step(gps)
+        result['command'] = near_command
 
         return result
 
@@ -105,8 +93,11 @@ class WorldModelAgent(MapAgent):
         # preprocess input
         bev = Image.fromarray(tick_data['topdown'])
         bev = preprocess_bev_state(bev).unsqueeze(0).cuda()
+        # route command
+        route_command = torch.LongTensor(tick_data['command']).unsqueeze(0).cuda()
+        print(route_command.shape)
 
-        action = self.world_model.policy(bev)
+        action = self.world_model.policy(bev, route_command)
 
         next_state = self.world_model.transition_model(bev, action)
 

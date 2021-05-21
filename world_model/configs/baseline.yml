@@ -3,8 +3,9 @@ TAG: 'baseline_transition'
 
 GPUS: [0, 1]
 
-BATCHSIZE: 8
+BATCHSIZE: 16
 PRECISION: 32
+EPOCHS: 100
 
 SEQUENCE_LENGTH: 6
 

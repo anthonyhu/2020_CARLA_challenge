@@ -1,4 +1,4 @@
-_BASE_: 'policy_only.yml'
+_BASE_: 'baseline.yml'
 
 LOG_DIR: '/data/cornucopia/ah2029/experiments/carla/debug'
 TAG: 'debug'
