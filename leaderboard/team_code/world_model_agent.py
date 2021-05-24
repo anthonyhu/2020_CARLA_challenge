@@ -67,8 +67,8 @@ class WorldModelAgent(MapAgent):
     def _init(self):
         super()._init()
 
-        self._turn_controller = PIDController(K_P=1.25, K_I=0.75, K_D=0.3, n=40)
-        self._speed_controller = PIDController(K_P=5.0, K_I=0.5, K_D=1.0, n=40)
+        #self._turn_controller = PIDController(K_P=1.25, K_I=0.75, K_D=0.3, n=40)
+        self._speed_controller = PIDController(K_P=5.0, K_I=0.5, K_D=1.0, n=10) #n=40
 
     def tick(self, input_data):
         result = super().tick(input_data)
@@ -105,15 +105,16 @@ class WorldModelAgent(MapAgent):
             next_state = torch.zeros_like(bev)
 
         predicted_steering = action[0, 0].item()
-        predicted_speed = action[0, 1].item()
+        desired_speed = action[0, 1].item()
 
         steer = predicted_steering# self._turn_controller.step(predicted_steering)
         steer = np.clip(steer, -1.0, 1.0)
 
         speed = tick_data['speed']
-        brake = predicted_speed < 0.1 or (speed / predicted_speed) > 1.2
+        brake = desired_speed < 0.1 or (speed / desired_speed) > 1.2
 
-        delta = np.clip(predicted_speed - speed, 0.0, 0.25)
+        delta = desired_speed - speed
+        #delta = np.clip(delta, 0.0, 0.25)
         throttle = self._speed_controller.step(delta)
         throttle = np.clip(throttle, 0.0, 0.75)
         throttle = throttle if not brake else 0.0
@@ -126,7 +127,7 @@ class WorldModelAgent(MapAgent):
         if DEBUG:
             debug_display(
                     tick_data, bev[0].cpu().numpy(), next_state[0].cpu().numpy(),
-                    steer, throttle, brake, predicted_speed, tick_data['command'].name,
+                    steer, throttle, brake, desired_speed, tick_data['command'].name,
                     self.step)
 
         return control
