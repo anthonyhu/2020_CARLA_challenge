@@ -44,6 +44,8 @@ class WorldModelTrainer(pl.LightningModule):
                 n_actions=self.config.MODEL.ACTION_DIM,
             )
 
+            self.adversarial_loss = torch.nn.MSELoss()
+
         set_bn_momentum(self, self.config.MODEL.BN_MOMENTUM)
 
     def forward(self, batch):
@@ -65,7 +67,7 @@ class WorldModelTrainer(pl.LightningModule):
 
         return predicted_actions, predicted_states
 
-    def shared_step(self, batch, is_train=False):
+    def shared_step(self, batch, is_train, optimizer_idx):
         predicted_actions, predicted_states = self.forward(batch)
 
         action_loss = self.policy_loss(predicted_actions, batch['action'])
@@ -75,16 +77,45 @@ class WorldModelTrainer(pl.LightningModule):
             target_states = torch.argmax(batch['bev'][:, 1:], dim=-3)
             future_prediction_loss = self.segmentation_loss(predicted_states, target_states)
 
-        return {'future_prediction': future_prediction_loss,
-                'action': action_loss
-                }
+        losses = {'future_prediction': future_prediction_loss,
+                  'action': action_loss
+                  }
 
-    def training_step(self, batch, batch_nb):
-        loss = self.shared_step(batch, is_train=True)
+        if not self.config.MODEL.REWARD.ENABLED:
+            return losses
+
+        # Train generator and discriminator
+        # See blog post https://towardsdatascience.com/how-to-train-a-gan-on-128-gpus-using-pytorch-9a5b27a52c73
+        if optimizer_idx == 0:
+            valid = torch.ones(predicted_actions.size(0), 1)
+            valid = valid.type_as(predicted_actions)
+
+            # adversarial loss is binary cross-entropy
+            reward_loss = self.adversarial_loss(self.predicted_actions, valid)
+
+        if optimizer_idx == 1:
+            valid = torch.ones(predicted_actions.size(0), 1)
+            valid = valid.type_as(predicted_actions)
+
+            valid_loss = self.adversarial_loss(self.predicted_actions.detach(), valid)
+
+            fake = torch.zeros(predicted_actions.size(0), 1)
+            fake = fake.type_as(predicted_actions)
+
+            fake_loss = self.adversarial_loss(batch['action'], fake)
+
+            reward_loss = (valid_loss + fake_loss) / 2
+
+        losses['reward_loss'] = reward_loss
+
+        return losses
+
+    def training_step(self, batch, batch_idx, optimizer_idx):
+        loss = self.shared_step(batch, is_train=True, optimizer_idx=optimizer_idx)
 
         return {'loss': sum(loss.values())}
 
-    def validation_step(self, batch, batch_nb):
+    def validation_step(self, batch, batch_idx):
         loss = self.shared_step(batch, is_train=False)
 
         return {'val_loss': sum(loss.values()).item()}
@@ -94,13 +125,20 @@ class WorldModelTrainer(pl.LightningModule):
 
         if self.config.MODEL.TRANSITION.ENABLED:
             params = params + list(self.transition_model.parameters())
-        if self.config.MODEL.REWARD.ENABLED:
-            params = params + list(self.reward_model.parameters())
+
         optimizer = torch.optim.Adam(
             params, lr=self.config.OPTIMIZER.LR, weight_decay=self.config.OPTIMIZER.WEIGHT_DECAY,
         )
 
-        return optimizer
+        if self.config.MODEL.REWARD.ENABLED:
+            discriminator_optimizer = torch.optim.Adam(
+                self.reward_model.parameters(),
+                lr=self.config.OPTIMIZER.LR,
+                weight_decay=self.config.OPTIMIZER.WEIGHT_DECAY,
+            )
+            return optimizer, discriminator_optimizer
+        else:
+            return optimizer
 
     def train_dataloader(self):
         return get_dataset_sequential(

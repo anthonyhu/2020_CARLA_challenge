@@ -2,7 +2,7 @@ _BASE_: 'baseline.yml'
 
 TAG: 'policy_only_state_256x256'
 
-GPUS: [0]
+GPUS: [0,1]
 
 BATCHSIZE: 64
 EPOCHS: 100
