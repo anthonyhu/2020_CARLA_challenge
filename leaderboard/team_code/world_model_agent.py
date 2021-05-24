@@ -72,7 +72,7 @@ class WorldModelAgent(MapAgent):
 
     def tick(self, input_data):
         result = super().tick(input_data)
-        result['image'] = result['rgb'] #np.concatenate(tuple(result[x] for x in ['rgb', 'rgb_left', 'rgb_right']), -1)
+        #result['image'] = result['rgb'] #np.concatenate(tuple(result[x] for x in ['rgb', 'rgb_left', 'rgb_right']), -1)
         gps = self._get_position(result)
 
         # Route command

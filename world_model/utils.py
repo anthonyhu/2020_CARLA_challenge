@@ -23,7 +23,13 @@ def preprocess_semantic(semantic_np):
 
 
 def preprocess_bev_state(x):
+    # Crop bottom
     x = x.crop((128, 0, 128 + 256, 256))
     x = np.array(x)
     x = preprocess_semantic(x)
-    return x[..., 128:, 64:-64]
+    # Crop top and sides
+    x_out = x[..., 128:, 64:-64]
+
+    # Double size
+    x_out = nn.functional.interpolate(x_out[None], scale_factor=2, mode='nearest')[0]
+    return x_out
