@@ -7,6 +7,15 @@ from carla_project.src.common import COLOR
 
 N_CLASSES = len(COLOR)
 
+# https://github.com/carla-simulator/carla/blob/master/PythonAPI/carla/agents/navigation/local_planner.py
+ROUTE_COMMANDS = {1: 'LEFT',
+                  2: 'RIGHT',
+                  3: 'STRAIGHT',
+                  4: 'LANEFOLLOW',
+                  5: 'CHANGELANELEFT',
+                  6: 'CHANGELANERIGHT',
+                  }
+
 
 def set_bn_momentum(model, momentum=0.1):
     for m in model.modules():

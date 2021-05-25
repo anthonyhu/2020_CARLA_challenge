@@ -22,7 +22,7 @@ def get_entry_point():
     return 'WorldModelAgent'
 
 
-def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_speed, command_name, step):
+def debug_display(tick_data, bev, next_state, steer, throttle, brake, command_name, step):
     _rgb = Image.fromarray(tick_data['rgb'])
     _draw_rgb = ImageDraw.Draw(_rgb)
 
@@ -48,8 +48,7 @@ def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_sp
     _draw.text((5, 30), 'Throttle: %.3f' % throttle)
     _draw.text((5, 50), 'Brake: %s' % brake)
     _draw.text((5, 70), 'Speed: %.3f' % tick_data['speed'])
-    _draw.text((5, 90), 'Desired: %.3f' % desired_speed)
-    _draw.text((5, 110), f'Command {command_name}')
+    _draw.text((5, 90), f'Command {command_name}')
 
     cv2.imshow('map', cv2.cvtColor(np.array(_combined), cv2.COLOR_BGR2RGB))
     cv2.waitKey(1)
@@ -68,7 +67,7 @@ class WorldModelAgent(MapAgent):
         super()._init()
 
         #self._turn_controller = PIDController(K_P=1.25, K_I=0.75, K_D=0.3, n=40)
-        self._speed_controller = PIDController(K_P=5.0, K_I=0.5, K_D=1.0, n=10) #n=40
+        #self._speed_controller = PIDController(K_P=5.0, K_I=0.5, K_D=1.0, n=10) #n=40
 
     def tick(self, input_data):
         result = super().tick(input_data)
@@ -105,18 +104,16 @@ class WorldModelAgent(MapAgent):
             next_state = torch.zeros_like(bev)
 
         predicted_steering = action[0, 0].item()
-        desired_speed = action[0, 1].item()
+        throttle = action[0, 1].item()
 
         steer = predicted_steering# self._turn_controller.step(predicted_steering)
+        if steer < -1.0 or steer > 1.0:
+            print(f'Steering is above limits {steer}')
         steer = np.clip(steer, -1.0, 1.0)
 
-        speed = tick_data['speed']
-        brake = desired_speed < 0.1 or (speed / desired_speed) > 1.2
+        brake = torch.argmax(action[0, 2:]) == 1
 
-        delta = desired_speed - speed
-        #delta = np.clip(delta, 0.0, 0.25)
-        throttle = self._speed_controller.step(delta)
-        throttle = np.clip(throttle, 0.0, 0.75)
+        throttle = np.clip(throttle, 0.0, 1.0)
         throttle = throttle if not brake else 0.0
 
         control = carla.VehicleControl()
@@ -127,7 +124,7 @@ class WorldModelAgent(MapAgent):
         if DEBUG:
             debug_display(
                     tick_data, bev[0].cpu().numpy(), next_state[0].cpu().numpy(),
-                    steer, throttle, brake, desired_speed, tick_data['command'].name,
+                    steer, throttle, brake, tick_data['command'].name,
                     self.step)
 
         return control

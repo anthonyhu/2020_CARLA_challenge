@@ -1,6 +1,6 @@
 _BASE_: 'baseline.yml'
 
-TAG: 'policy_only_state_256x256'
+TAG: 'policy_throttle'
 
 GPUS: [0,1]
 

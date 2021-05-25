@@ -29,12 +29,12 @@ class SequentialCarlaDataset(Dataset):
         self.frames = list()
         pd_measurements = pd.DataFrame([eval(x.read_text()) for x in measurements])
 
-        self.labels = np.stack([pd_measurements['steer'].values.astype(np.float32),
-                                pd_measurements['target_speed'].values.astype(np.float32)],
-                               axis=-1)
-        self.labels[np.isnan(self.labels)] = 0.0
+        self.labels = {}
+        for key in ['steer', 'speed', 'throttle', 'brake']:
+            self.labels[key] = pd_measurements[key].values.astype(np.float32)
+            self.labels[key][np.isnan(self.labels[key])] = 0.0
 
-        self.route_commands = pd_measurements['command'].values
+        self.labels['route_command'] = pd_measurements['command'].values
 
         for image_path in sorted((dataset_dir / 'rgb').glob('*.png')):
             frame = str(image_path.stem)
@@ -42,15 +42,14 @@ class SequentialCarlaDataset(Dataset):
             assert (dataset_dir / 'rgb_left' / ('%s.png' % frame)).exists()
             assert (dataset_dir / 'rgb_right' / ('%s.png' % frame)).exists()
             assert (dataset_dir / 'topdown' / ('%s.png' % frame)).exists()
-            assert int(frame) < len(self.labels)
 
             self.frames.append(frame)
 
         self.frames = np.asarray(self.frames)
 
         self.frames = self.frames[skip_beginning:]
-        self.labels = self.labels[skip_beginning:]
-        self.route_commands = self.route_commands[skip_beginning:]
+        for key, value in self.labels.items():
+            self.labels[key] = value[skip_beginning:]
 
         assert len(self.frames) > 0, '%s has 0 frames.' % dataset_dir
 
@@ -62,8 +61,10 @@ class SequentialCarlaDataset(Dataset):
 
         data = {'image': [],
                 'bev': [],
-                'action': [],
+                'speed': [],
                 'route_command': [],
+                'action': [],
+                'brake': [],
                 }
 
         for i in range(index, index + self.sequence_length):
@@ -83,12 +84,14 @@ class SequentialCarlaDataset(Dataset):
             topdown = Image.open(path / 'topdown' / ('%s.png' % frame))
             topdown = preprocess_bev_state(topdown)
 
-            actions = torch.FloatTensor(self.labels[i])
+            actions = torch.FloatTensor(np.stack([self.labels['steer'][i], self.labels['throttle'][i]], axis=-1))
 
             data['image'].append(image)
             data['bev'].append(topdown)
+            data['speed'].append(torch.FloatTensor([self.labels['speed'][i]]))
+            data['route_command'].append(torch.LongTensor([self.labels['route_command'][i]]))
             data['action'].append(actions)
-            data['route_command'].append(torch.LongTensor([self.route_commands[i]]))
+            data['brake'].append(torch.LongTensor([self.labels['brake'][i]]))
 
         for key, value in data.items():
             data[key] = torch.stack(value)

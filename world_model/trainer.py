@@ -35,6 +35,7 @@ class WorldModelTrainer(pl.LightningModule):
                 use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
             )
         self.policy_loss = ActionLoss(norm=1)
+        self.brake_loss = torch.nn.CrossEntropyLoss()
 
         if self.config.MODEL.REWARD.ENABLED:
             print('Enabled: Reward')
@@ -67,10 +68,14 @@ class WorldModelTrainer(pl.LightningModule):
 
         return predicted_actions, predicted_states
 
-    def shared_step(self, batch, is_train, optimizer_idx):
+    def shared_step(self, batch, is_train, optimizer_idx=0):
         predicted_actions, predicted_states = self.forward(batch)
 
-        action_loss = self.policy_loss(predicted_actions, batch['action'])
+        action_loss = self.policy_loss(predicted_actions[..., :2].contiguous(), batch['action'])
+        b, s = predicted_actions.shape[:2]
+        brake_loss = self.brake_loss(predicted_actions[..., 2:].contiguous().view(b*s, -1),
+                                     batch['brake'].view(b*s)
+                                     )
 
         future_prediction_loss = action_loss.new_zeros(1)
         if self.config.MODEL.TRANSITION.ENABLED:
@@ -78,7 +83,8 @@ class WorldModelTrainer(pl.LightningModule):
             future_prediction_loss = self.segmentation_loss(predicted_states, target_states)
 
         losses = {'future_prediction': future_prediction_loss,
-                  'action': action_loss
+                  'action': action_loss,
+                  'brake': brake_loss,
                   }
 
         if not self.config.MODEL.REWARD.ENABLED:
@@ -110,8 +116,9 @@ class WorldModelTrainer(pl.LightningModule):
 
         return losses
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
-        loss = self.shared_step(batch, is_train=True, optimizer_idx=optimizer_idx)
+    #def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):
+        loss = self.shared_step(batch, is_train=True, optimizer_idx=0)
 
         return {'loss': sum(loss.values())}
 
