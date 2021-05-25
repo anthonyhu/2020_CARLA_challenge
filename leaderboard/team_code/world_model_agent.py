@@ -95,8 +95,10 @@ class WorldModelAgent(MapAgent):
         bev = preprocess_bev_state(bev).unsqueeze(0).cuda()
         # route command
         route_command = torch.LongTensor([tick_data['command'].value]).unsqueeze(0).cuda()
+        # input speed
+        input_speed = torch.FloatTensor([tick_data['speed']]).unsqueeze(0).cuda()
 
-        action = self.world_model.policy(bev, route_command)
+        action = self.world_model.policy(bev, route_command, input_speed)
 
         if self.world_model.config.MODEL.TRANSITION.ENABLED:
             next_state = self.world_model.transition_model(bev, action)
@@ -111,7 +113,7 @@ class WorldModelAgent(MapAgent):
             print(f'Steering is above limits {steer}')
         steer = np.clip(steer, -1.0, 1.0)
 
-        brake = torch.argmax(action[0, 2:]) == 1
+        brake = (torch.argmax(action[0, 2:]) == 1).item()
 
         throttle = np.clip(throttle, 0.0, 1.0)
         throttle = throttle if not brake else 0.0
