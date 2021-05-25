@@ -22,8 +22,10 @@ class WorldModelTrainer(pl.LightningModule):
         self.dataset_path = os.path.join(self.config.DATASET.DATAROOT, self.config.DATASET.VERSION)
 
         # Model
-        self.policy = Policy(in_channels=self.config.MODEL.IN_CHANNELS, out_channels=self.config.MODEL.ACTION_DIM,
-                             command_channels=self.config.MODEL.COMMAND_DIM
+        self.policy = Policy(in_channels=self.config.MODEL.IN_CHANNELS,
+                             out_channels=self.config.MODEL.ACTION_DIM,
+                             command_channels=self.config.MODEL.COMMAND_DIM,
+                             speed_as_input=self.config.MODEL.POLICY.SPEED_INPUT,
                              )
 
         if self.config.MODEL.TRANSITION.ENABLED:
@@ -56,7 +58,8 @@ class WorldModelTrainer(pl.LightningModule):
         input_policy = state.view(b*s, c, h, w)
 
         route_command = batch['route_command'].view(b * s, -1)
-        predicted_actions = self.policy(input_policy, route_command)
+        speed = batch['route_command'].view(b * s, -1)
+        predicted_actions = self.policy(input_policy, route_command, speed)
         predicted_actions = predicted_actions.view(b, s, -1)
 
         predicted_states = None

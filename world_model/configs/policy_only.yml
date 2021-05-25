@@ -1,6 +1,6 @@
 _BASE_: 'baseline.yml'
 
-TAG: 'policy_throttle'
+TAG: 'policy_throttle_speed_input'
 
 GPUS: [0,1]
 
@@ -10,5 +10,7 @@ EPOCHS: 100
 SEQUENCE_LENGTH: 1
 
 MODEL:
+  POLICY:
+    SPEED_INPUT: True
   TRANSITION:
     ENABLED: False
