@@ -115,7 +115,7 @@ class WorldModelAgent(MapAgent):
 
         brake = (torch.argmax(action[0, 2:]) == 1).item()
 
-        throttle = np.clip(throttle, 0.0, 1.0)
+        throttle = np.clip(throttle, 0.0, 0.75)
         throttle = throttle if not brake else 0.0
 
         control = carla.VehicleControl()

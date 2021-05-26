@@ -4,6 +4,8 @@ import torch.nn as nn
 from efficientnet_pytorch import EfficientNet
 from torchvision.models.resnet import resnet18
 
+from world_model.layers import RestrictionActivation
+
 
 class Policy(nn.Module):
     def __init__(self, in_channels=64, out_channels=4, command_channels=6, speed_as_input=False,
@@ -28,6 +30,10 @@ class Policy(nn.Module):
                                         )
         speed_channels = 1 if self.speed_as_input else 0
         self.last_layer = nn.Linear(64 + command_channels + speed_channels, out_channels)
+
+        self.steering_activation = RestrictionActivation(min_value=-1, max_value=1)
+        self.throttle_activation = RestrictionActivation(min_value=0, max_value=0.75)
+
         self.delete_unused_layers()
 
     def delete_unused_layers(self):
@@ -73,6 +79,11 @@ class Policy(nn.Module):
         if self.speed_as_input:
             x_concat = torch.cat([x_concat, speed], dim=-1)
         x = self.last_layer(x_concat)
+
+        # Restrict steering and throttle output range
+        x[..., 0] = self.steering_activation(x[..., 0])
+        x[..., 1] = self.throttle_activation(x[..., 1])
+
         return x
 
 

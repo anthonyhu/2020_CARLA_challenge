@@ -1,6 +1,6 @@
 _BASE_: 'baseline.yml'
 
-TAG: 'policy_throttle_speed_input'
+TAG: 'policy_throttle_speed_input_restriction_output'
 
 GPUS: [0,1]
 
