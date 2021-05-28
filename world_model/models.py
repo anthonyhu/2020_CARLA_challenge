@@ -24,12 +24,10 @@ class Policy(nn.Module):
                                         self.backbone._swish,
                                         nn.AdaptiveAvgPool2d(output_size=1),
                                         nn.Flatten(),
-                                        ActivatedNormLinear(512, 256),
-                                        ActivatedNormLinear(256, 128),
-                                        ActivatedNormLinear(128, 64),
+                                        ActivatedNormLinear(512, 128),
                                         )
         speed_channels = 1 if self.speed_as_input else 0
-        self.last_layer = nn.Linear(64 + command_channels + speed_channels, out_channels)
+        self.last_layer = nn.Linear(128 + command_channels + speed_channels, out_channels)
 
         self.steering_activation = RestrictionActivation(min_value=-1, max_value=1)
         self.throttle_activation = RestrictionActivation(min_value=0, max_value=0.75)

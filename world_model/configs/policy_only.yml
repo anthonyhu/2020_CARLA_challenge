@@ -1,8 +1,8 @@
 _BASE_: 'baseline.yml'
 
-TAG: 'policy_throttle_speed_input_restriction_output'
+TAG: 'policy_throttle_speed_input_restriction_output_fewer_linear_layers'
 
-GPUS: [0,1]
+GPUS: [0, 1]
 
 BATCHSIZE: 64
 EPOCHS: 100
