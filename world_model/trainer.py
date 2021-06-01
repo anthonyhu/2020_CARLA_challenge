@@ -37,7 +37,7 @@ class WorldModelTrainer(pl.LightningModule):
                 use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
             )
         self.policy_loss = ActionLoss(norm=1)
-        self.brake_loss = torch.nn.CrossEntropyLoss()
+        #self.brake_loss = torch.nn.CrossEntropyLoss()
 
         if self.config.MODEL.REWARD.ENABLED:
             print('Enabled: Reward')
@@ -74,11 +74,11 @@ class WorldModelTrainer(pl.LightningModule):
     def shared_step(self, batch, is_train, optimizer_idx=0):
         predicted_actions, predicted_states = self.forward(batch)
 
-        action_loss = self.policy_loss(predicted_actions[..., :2].contiguous(), batch['action'])
-        b, s = predicted_actions.shape[:2]
-        brake_loss = self.brake_loss(predicted_actions[..., 2:].contiguous().view(b*s, -1),
-                                     batch['brake'].view(b*s)
-                                     )
+        action_loss = self.policy_loss(predicted_actions, batch['action'])
+        # b, s = predicted_actions.shape[:2]
+        # brake_loss = self.brake_loss(predicted_actions[..., 2:].contiguous().view(b*s, -1),
+        #                              batch['brake'].view(b*s)
+        #                              )
 
         future_prediction_loss = action_loss.new_zeros(1)
         if self.config.MODEL.TRANSITION.ENABLED:
@@ -87,7 +87,7 @@ class WorldModelTrainer(pl.LightningModule):
 
         losses = {'future_prediction': future_prediction_loss,
                   'action': action_loss,
-                  'brake': brake_loss,
+                  #'brake': brake_loss,
                   }
 
         if not self.config.MODEL.REWARD.ENABLED:

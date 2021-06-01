@@ -29,8 +29,8 @@ class Policy(nn.Module):
         speed_channels = 1 if self.speed_as_input else 0
         self.last_layer = nn.Linear(128 + command_channels + speed_channels, out_channels)
 
-        self.steering_activation = RestrictionActivation(min_value=-1, max_value=1)
-        self.throttle_activation = RestrictionActivation(min_value=0, max_value=0.75)
+        #self.steering_activation = RestrictionActivation(min_value=-1, max_value=1)
+        #self.throttle_activation = RestrictionActivation(min_value=0, max_value=0.75)
 
         self.delete_unused_layers()
 
@@ -79,8 +79,8 @@ class Policy(nn.Module):
         x = self.last_layer(x_concat)
 
         # Restrict steering and throttle output range
-        x[..., 0] = self.steering_activation(x[..., 0])
-        x[..., 1] = self.throttle_activation(x[..., 1])
+        #x[..., 0] = self.steering_activation(x[..., 0])
+        #x[..., 1] = self.throttle_activation(x[..., 1])
 
         return x
 

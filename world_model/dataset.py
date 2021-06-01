@@ -84,7 +84,7 @@ class SequentialCarlaDataset(Dataset):
             topdown = Image.open(path / 'topdown' / ('%s.png' % frame))
             topdown = preprocess_bev_state(topdown)
 
-            actions = torch.FloatTensor(np.stack([self.labels['steer'][i], self.labels['throttle'][i]], axis=-1))
+            actions = torch.FloatTensor(np.stack([self.labels['steer'][i], self.labels['speed'][i]], axis=-1))
 
             data['image'].append(image)
             data['bev'].append(topdown)
