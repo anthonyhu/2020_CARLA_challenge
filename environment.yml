@@ -31,3 +31,4 @@ dependencies:
     - moviepy==1.0.3
     - ray==1.1.0
     - xmlschema==1.6.2
+    - pygame==2.0.1
