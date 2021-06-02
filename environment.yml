@@ -27,3 +27,7 @@ dependencies:
     - ephem==3.7.7.1
     - dictor==0.1.5
     - scikit-video==1.1.11
+    - lmdb==1.2.1
+    - moviepy==1.0.3
+    - ray==1.1.0
+    - xmlschema==1.6.2
