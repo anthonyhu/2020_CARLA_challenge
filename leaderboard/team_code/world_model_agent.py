@@ -16,13 +16,15 @@ from team_code.pid_controller import PIDController
 
 
 DEBUG = int(os.environ.get('HAS_DISPLAY', 0))
+SAVE_FRAMES = True
+ROUTE_NAME = 'route_05'
 
 
 def get_entry_point():
     return 'WorldModelAgent'
 
 
-def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_speed, command_name, step):
+def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_speed, command_name, step, save_path):
     _rgb = Image.fromarray(tick_data['rgb'])
     _draw_rgb = ImageDraw.Draw(_rgb)
 
@@ -51,6 +53,9 @@ def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_sp
     _draw.text((5, 90), 'Desired: %.3f' % desired_speed)
     _draw.text((5, 110), f'Command {command_name}')
 
+    if SAVE_FRAMES:
+        os.makedirs(os.path.join(save_path, ROUTE_NAME), exist_ok=True)
+        Image.fromarray(np.array(_combined)).save(os.path.join(save_path, ROUTE_NAME, f'{step}.png'))
     cv2.imshow('map', cv2.cvtColor(np.array(_combined), cv2.COLOR_BGR2RGB))
     cv2.waitKey(1)
 
@@ -60,6 +65,7 @@ class WorldModelAgent(MapAgent):
         super().setup(path_to_conf_file)
 
         self.converter = Converter()
+        self.save_path = os.path.dirname(path_to_conf_file)
         self.world_model = WorldModelTrainer.load_from_checkpoint(path_to_conf_file)
         self.world_model.cuda()
         self.world_model.eval()
@@ -132,6 +138,6 @@ class WorldModelAgent(MapAgent):
             debug_display(
                     tick_data, bev[0].cpu().numpy(), next_state[0].cpu().numpy(),
                     steer, throttle, brake, desired_speed, tick_data['command'].name,
-                    self.step)
+                    self.step, self.save_path)
 
         return control
