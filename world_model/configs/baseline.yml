@@ -1,11 +1,11 @@
-LOG_DIR: '/data/cornucopia/ah2029/experiments/carla/baseline'
+LOG_DIR: '/home/mifs/ah2029/experiments/carla/future_pred'
 TAG: 'baseline_transition'
 
 GPUS: [0, 1]
 
-BATCHSIZE: 16
+BATCHSIZE: 6
 PRECISION: 32
-EPOCHS: 100
+EPOCHS: 50
 
 SEQUENCE_LENGTH: 6
 

@@ -65,7 +65,7 @@ class Policy(nn.Module):
         # concatenate route_commands
         b, c, h, w = x.shape
 
-        # substract 1 because commands start at 1.
+        # substract 1 because route commands start at 1.
         route_commands = torch.nn.functional.one_hot(route_commands.squeeze(-1) - 1, self.command_channels)
 
         route_commands_1 = route_commands.view(b, -1, 1, 1).expand(-1, -1, h, w)

@@ -58,14 +58,14 @@ class WorldModelTrainer(pl.LightningModule):
         input_policy = state.view(b*s, c, h, w)
 
         route_command = batch['route_command'].view(b * s, -1)
-        speed = batch['route_command'].view(b * s, -1)
+        speed = batch['speed'].view(b * s, -1)
         predicted_actions = self.policy(input_policy, route_command, speed)
         predicted_actions = predicted_actions.view(b, s, -1)
 
         predicted_states = None
         if self.config.MODEL.TRANSITION.ENABLED:
             input_transition_states = state[:, :-1].contiguous().view(b * (s - 1), c, h, w)
-            input_transition_actions = batch['action'][:, :-1].contiguous().view(b * (s - 1), -1)
+            input_transition_actions = predicted_actions[:, :-1].contiguous().view(b * (s - 1), -1)
             predicted_states = self.transition_model(input_transition_states, input_transition_actions)
             predicted_states = predicted_states.view(b, s-1, c, h, w)
 
