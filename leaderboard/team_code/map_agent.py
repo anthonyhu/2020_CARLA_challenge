@@ -14,9 +14,9 @@ class MapAgent(BaseAgent):
         result = super().sensors()
         result.append({
             'type': 'sensor.camera.semantic_segmentation',
-            'x': 0.0, 'y': 0.0, 'z': 100.0,
+            'x': 15.0, 'y': 0.0, 'z': 70.0,
             'roll': 0.0, 'pitch': -90.0, 'yaw': 0.0,
-            'width': 512, 'height': 512, 'fov': 5 * 10.0,
+            'width': 512, 'height': 512, 'fov': 3 * 10.0,
             'id': 'map'
             })
 

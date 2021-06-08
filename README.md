@@ -73,15 +73,13 @@ First, spin up a CARLA server
 
 then run the agent.
 
-```bash
-export CARLA_ROOT=/home/bradyzhou/software/CARLA_0.9.10.1           # change to where you installed CARLA
-export PORT=2000                                                    # change to port that CARLA is running on
-export ROUTES=leaderboard/data/routes_training/route_19.xml         # change to desired route
-export TEAM_AGENT=auto_pilot.py                                     # no need to change
-export TEAM_CONFIG=sample_data                                      # change path to save data
+```bash                                                
+export ROUTES=leaderboard/data/routes_training/route_19.xml         # change to desired route                                   # change path to save data
 
-./run_agent.sh
+python run_agent.py --agent auto_pilot.py --agent-config /home/mifs/ah2029/datasets/carla/self_collected_data --routes leaderboard/data/routes_training/route_19.xml
 ```
+
+toggle display directly in `auto_pilot.py`
 
 ## Run a pretrained model
 
@@ -100,14 +98,7 @@ Spin up a CARLA server
 then run the agent.
 
 ```bash
-export CARLA_ROOT=/home/bradyzhou/software/CARLA_0.9.10.1           # change to where you installed CARLA
-export PORT=2000                                                    # change to port that CARLA is running on
-export ROUTES=leaderboard/data/routes_training/route_19.xml         # change to desired route
-export TEAM_AGENT=image_agent.py                                    # no need to change
-export TEAM_CONFIG=model.ckpt                                       # change path to checkpoint
-export HAS_DISPLAY=1                                                # set to 0 if you don't want a debug window
-
-./run_agent.sh
+HAS_DISPLAY=1 python run_agent.py --agent world_model_agent.py --agent-config /data/cornucopia/ah2029/experiments/carla/baseline/21May2021at16:32:23BST_hachiban_policy_only/last.ckpt --routes leaderboard/data/routes_training/route_05.xml
 ```
 
 ## Training models from scratch

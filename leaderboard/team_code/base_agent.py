@@ -38,20 +38,20 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
                     'width': IMAGE_WIDTH, 'height': IMAGE_HEIGHT, 'fov': 90,
                     'id': 'rgb'
                     },
-                # {
-                #     'type': 'sensor.camera.rgb',
-                #     'x': 1.2, 'y': -0.25, 'z': 1.3,
-                #     'roll': 0.0, 'pitch': 0.0, 'yaw': -45.0,
-                #     'width': IMAGE_WIDTH, 'height': IMAGE_HEIGHT, 'fov': 90,
-                #     'id': 'rgb_left'
-                #     },
-                # {
-                #     'type': 'sensor.camera.rgb',
-                #     'x': 1.2, 'y': 0.25, 'z': 1.3,
-                #     'roll': 0.0, 'pitch': 0.0, 'yaw': 45.0,
-                #     'width': IMAGE_WIDTH, 'height': IMAGE_HEIGHT, 'fov': 90,
-                #     'id': 'rgb_right'
-                #     },
+                {
+                    'type': 'sensor.camera.rgb',
+                    'x': 1.2, 'y': -0.25, 'z': 1.3,
+                    'roll': 0.0, 'pitch': 0.0, 'yaw': -45.0,
+                    'width': IMAGE_WIDTH, 'height': IMAGE_HEIGHT, 'fov': 90,
+                    'id': 'rgb_left'
+                    },
+                {
+                    'type': 'sensor.camera.rgb',
+                    'x': 1.2, 'y': 0.25, 'z': 1.3,
+                    'roll': 0.0, 'pitch': 0.0, 'yaw': 45.0,
+                    'width': IMAGE_WIDTH, 'height': IMAGE_HEIGHT, 'fov': 90,
+                    'id': 'rgb_right'
+                    },
                 {
                     'type': 'sensor.other.imu',
                     'x': 0.0, 'y': 0.0, 'z': 0.0,
@@ -77,16 +77,16 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
         self.step += 1
 
         rgb = cv2.cvtColor(input_data['rgb'][1][:, :, :3], cv2.COLOR_BGR2RGB)
-        #rgb_left = cv2.cvtColor(input_data['rgb_left'][1][:, :, :3], cv2.COLOR_BGR2RGB)
-        #rgb_right = cv2.cvtColor(input_data['rgb_right'][1][:, :, :3], cv2.COLOR_BGR2RGB)
+        rgb_left = cv2.cvtColor(input_data['rgb_left'][1][:, :, :3], cv2.COLOR_BGR2RGB)
+        rgb_right = cv2.cvtColor(input_data['rgb_right'][1][:, :, :3], cv2.COLOR_BGR2RGB)
         gps = input_data['gps'][1][:2]
         speed = input_data['speed'][1]['speed']
         compass = input_data['imu'][1][-1]
 
         return {
                 'rgb': rgb,
-         #       'rgb_left': rgb_left,
-          #      'rgb_right': rgb_right,
+               'rgb_left': rgb_left,
+               'rgb_right': rgb_right,
                 'gps': gps,
                 'speed': speed,
                 'compass': compass

@@ -14,7 +14,7 @@ from team_code.map_agent import MapAgent
 from team_code.pid_controller import PIDController
 
 
-HAS_DISPLAY = True
+HAS_DISPLAY = False
 DEBUG = False
 WEATHERS = [
         carla.WeatherParameters.ClearNoon,
@@ -82,12 +82,11 @@ class AutoPilot(MapAgent):
 
         if path_to_conf_file:
             now = datetime.datetime.now()
-            string = pathlib.Path(os.environ['ROUTES']).stem + '_'
-            string += '_'.join(map(lambda x: '%02d' % x, (now.month, now.day, now.hour, now.minute, now.second)))
-
-            print(string)
+            #string = pathlib.Path(os.environ['ROUTES']).stem + '_'
+            string = '_'.join(map(lambda x: '%02d' % x, (now.month, now.day, now.hour, now.minute, now.second)))
 
             self.save_path = pathlib.Path(path_to_conf_file) / string
+            print(f'Saving in {self.save_path}')
             self.save_path.mkdir(exist_ok=False)
 
             (self.save_path / 'rgb').mkdir()
@@ -167,6 +166,8 @@ class AutoPilot(MapAgent):
         near_node, near_command = self._waypoint_planner.run_step(gps)
         far_node, far_command = self._command_planner.run_step(gps)
 
+        ####
+        # For visualisation
         _topdown = Image.fromarray(COLOR[CONVERTER[topdown]])
         _rgb = Image.fromarray(rgb)
         _draw = ImageDraw.Draw(_topdown)
@@ -187,6 +188,7 @@ class AutoPilot(MapAgent):
         if HAS_DISPLAY:
             cv2.imshow('map', cv2.cvtColor(np.array(_combined), cv2.COLOR_BGR2RGB))
             cv2.waitKey(1)
+        #####
 
         control = carla.VehicleControl()
         control.steer = steer + 1e-2 * np.random.randn()
