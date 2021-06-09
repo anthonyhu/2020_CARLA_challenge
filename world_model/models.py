@@ -4,7 +4,67 @@ import torch.nn as nn
 from efficientnet_pytorch import EfficientNet
 from torchvision.models.resnet import resnet18
 
-from world_model.layers import RestrictionActivation
+from world_model.layers import RestrictionActivation, ActivatedNormLinear, UpsamplingAdd
+from world_model.temporal_layers import Bottleneck3D, TemporalBlock
+
+
+class TemporalModel(nn.Module):
+    def __init__(
+            self, in_channels, receptive_field, input_shape, start_out_channels=64, extra_in_channels=0,
+            n_spatial_layers_between_temporal_layers=0, use_pyramid_pooling=True):
+        super().__init__()
+        self.receptive_field = receptive_field
+        n_temporal_layers = receptive_field - 1
+
+        h, w = input_shape
+        modules = []
+
+        block_in_channels = in_channels
+        block_out_channels = start_out_channels
+
+        for _ in range(n_temporal_layers):
+            if use_pyramid_pooling:
+                use_pyramid_pooling = True
+                pool_sizes = [(2, h, w)]
+            else:
+                use_pyramid_pooling = False
+                pool_sizes = None
+            temporal = TemporalBlock(
+                block_in_channels,
+                block_out_channels,
+                use_pyramid_pooling=use_pyramid_pooling,
+                pool_sizes=pool_sizes,
+            )
+            spatial = [
+                Bottleneck3D(block_out_channels, block_out_channels, kernel_size=(1, 3, 3))
+                for _ in range(n_spatial_layers_between_temporal_layers)
+            ]
+            temporal_spatial_layers = nn.Sequential(temporal, *spatial)
+            modules.extend(temporal_spatial_layers)
+
+            block_in_channels = block_out_channels
+            block_out_channels += extra_in_channels
+
+        self.out_channels = block_in_channels
+
+        self.model = nn.Sequential(*modules)
+
+    def forward(self, x):
+        # Reshape input tensor to (batch, C, time, H, W)
+        x = x.permute(0, 2, 1, 3, 4)
+        x = self.model(x)
+        x = x.permute(0, 2, 1, 3, 4).contiguous()
+        return x[:, (self.receptive_field - 1):].contiguous()
+
+
+class TemporalModelIdentity(nn.Module):
+    def __init__(self, in_channels, receptive_field):
+        super().__init__()
+        self.receptive_field = receptive_field
+        self.out_channels = in_channels
+
+    def forward(self, x):
+        return x[:, (self.receptive_field - 1):].contiguous()
 
 
 class Policy(nn.Module):
@@ -85,24 +145,6 @@ class Policy(nn.Module):
         return x
 
 
-class UpsamplingAdd(nn.Module):
-    def __init__(self, in_channels, action_channels, out_channels, scale_factor=2):
-        super().__init__()
-        self.upsample_layer = nn.Sequential(
-            nn.Upsample(scale_factor=scale_factor, mode='bilinear', align_corners=False),
-            nn.Conv2d(in_channels + action_channels, out_channels, kernel_size=1, padding=0, bias=False),
-            nn.BatchNorm2d(out_channels),
-        )
-
-    def forward(self, x, x_skip, action):
-        # Spatially broadcast
-        b, _, h, w = x.shape
-        action = action.view(b, -1, 1, 1).expand(b, -1, h, w)
-        x = torch.cat([x, action], dim=1)
-        x = self.upsample_layer(x)
-        return x + x_skip
-
-
 class TransitionModel(nn.Module):
     def __init__(self, in_channels, action_channels=4):
         super().__init__()
@@ -155,17 +197,6 @@ class TransitionModel(nn.Module):
 
         output = self.output_head(x)
         return output
-
-
-class ActivatedNormLinear(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.module = nn.Sequential(nn.Linear(in_channels, out_channels),
-                                    nn.BatchNorm1d(out_channels),
-                                    nn.ReLU(inplace=True))
-
-    def forward(self, x):
-        return self.module(x)
 
 
 class RewardModel(Policy):

@@ -30,10 +30,11 @@ class SegmentationLoss(nn.Module):
         return torch.mean(loss)
 
 
-class ActionLoss(nn.Module):
-    def __init__(self, norm):
+class RegressionLoss(nn.Module):
+    def __init__(self, norm, channel_dim=-1):
         super().__init__()
         self.norm = norm
+        self.channel_dim = channel_dim
 
         if norm == 1:
             self.loss_fn = F.l1_loss
@@ -46,5 +47,5 @@ class ActionLoss(nn.Module):
         loss = self.loss_fn(prediction, target, reduction='none')
 
         # Sum channel dimension
-        loss = torch.sum(loss, dim=-1, keepdims=True)
+        loss = torch.sum(loss, dim=self.channel_dim, keepdims=True)
         return loss.mean()

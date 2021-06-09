@@ -11,9 +11,6 @@ from numpy import nan
 from carla_project.src.common import COLOR
 from world_model.utils import preprocess_bev_state
 
-# Data has frame skip of 5.
-GAP = 1
-STEPS = 4
 N_CLASSES = len(COLOR)
 
 
@@ -30,7 +27,7 @@ class SequentialCarlaDataset(Dataset):
         pd_measurements = pd.DataFrame([eval(x.read_text()) for x in measurements])
 
         self.labels = {}
-        for key in ['steer', 'speed', 'throttle', 'brake']:
+        for key in ['steer', 'target_speed', 'speed', 'throttle', 'brake']:
             self.labels[key] = pd_measurements[key].values.astype(np.float32)
             self.labels[key][np.isnan(self.labels[key])] = 0.0
 
@@ -54,7 +51,7 @@ class SequentialCarlaDataset(Dataset):
         assert len(self.frames) > 0, '%s has 0 frames.' % dataset_dir
 
     def __len__(self):
-        return len(self.frames) - GAP * STEPS - (self.sequence_length - 1)
+        return len(self.frames) - (self.sequence_length - 1)
 
     def __getitem__(self, index):
         path = self.dataset_dir
@@ -84,7 +81,7 @@ class SequentialCarlaDataset(Dataset):
             topdown = Image.open(path / 'topdown' / ('%s.png' % frame))
             topdown = preprocess_bev_state(topdown)
 
-            actions = torch.FloatTensor(np.stack([self.labels['steer'][i], self.labels['speed'][i]], axis=-1))
+            actions = torch.FloatTensor(np.stack([self.labels['steer'][i], self.labels['target_speed'][i]], axis=-1))
 
             data['image'].append(image)
             data['bev'].append(topdown)

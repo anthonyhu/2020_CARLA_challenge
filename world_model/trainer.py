@@ -6,8 +6,8 @@ import pytorch_lightning as pl
 
 from world_model.config import get_cfg
 from world_model.dataset import get_dataset_sequential
-from world_model.models import Policy, TransitionModel, RewardModel
-from world_model.losses import ActionLoss, SegmentationLoss
+from world_model.models import TemporalModel, TemporalModelIdentity, Policy, TransitionModel, RewardModel
+from world_model.losses import RegressionLoss, SegmentationLoss
 from world_model.utils import set_bn_momentum
 
 
@@ -22,7 +22,18 @@ class WorldModelTrainer(pl.LightningModule):
         self.dataset_path = os.path.join(self.config.DATASET.DATAROOT, self.config.DATASET.VERSION)
 
         # Model
-        self.policy = Policy(in_channels=self.config.MODEL.IN_CHANNELS,
+        self.receptive_field = self.config.RECEPTIVE_FIELD
+        if self.receptive_field == 1:
+            self.temporal_model = TemporalModelIdentity
+        else:
+            self.temporal_model = TemporalModel(
+                in_channels=self.config.MODEL.IN_CHANNELS, receptive_field=self.receptive_field,
+                input_shape=self.config.IMAGE.DIM, start_out_channels=self.config.MODEL.TEMPORAL_MODEL.OUTPUT_DIM,
+            )
+
+        state_in_channel = self.temporal_model.out_channels
+
+        self.policy = Policy(in_channels=state_in_channel,
                              out_channels=self.config.MODEL.ACTION_DIM,
                              command_channels=self.config.MODEL.COMMAND_DIM,
                              speed_as_input=self.config.MODEL.POLICY.SPEED_INPUT,
@@ -31,13 +42,18 @@ class WorldModelTrainer(pl.LightningModule):
         if self.config.MODEL.TRANSITION.ENABLED:
             print('Enabled: Next state prediction')
             self.transition_model = TransitionModel(
-                in_channels=self.config.MODEL.IN_CHANNELS, action_channels=self.config.MODEL.ACTION_DIM,
+                in_channels=state_in_channel, action_channels=self.config.MODEL.ACTION_DIM,
             )
-            self.segmentation_loss = SegmentationLoss(
-                use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
-            )
-        self.policy_loss = ActionLoss(norm=1)
-        #self.brake_loss = torch.nn.CrossEntropyLoss()
+            # self.segmentation_loss = SegmentationLoss(
+            #     use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
+            # )
+            self.future_pred_loss = RegressionLoss(norm=2, channel_dim=-3)
+
+            assert self.receptive_field + 1 == self.config.SEQUENCE_LENGTH
+        else:
+            assert self.receptive_field == self.config.SEQUENCE_LENGTH
+
+        self.policy_loss = RegressionLoss(norm=1, channel_dim=-1)
 
         if self.config.MODEL.REWARD.ENABLED:
             print('Enabled: Reward')
@@ -52,38 +68,39 @@ class WorldModelTrainer(pl.LightningModule):
         set_bn_momentum(self, self.config.MODEL.BN_MOMENTUM)
 
     def forward(self, batch):
-        state = batch['bev']
-        b, s, c, h, w = state.shape
+        # Temporal model
+        state = self.temporal_model(batch['bev'])
 
+        # Policy
+        b, s, c, h, w = state.shape
+        route_command = batch['route_command'][:, (self.receptive_field - 1):].contiguous().view(b * s, -1)
+        speed = batch['speed'][:, (self.receptive_field - 1):].contiguous().view(b * s, -1)
         input_policy = state.view(b*s, c, h, w)
 
-        route_command = batch['route_command'].view(b * s, -1)
-        speed = batch['speed'].view(b * s, -1)
         predicted_actions = self.policy(input_policy, route_command, speed)
         predicted_actions = predicted_actions.view(b, s, -1)
 
-        predicted_states = None
+        # Future prediction
+        future_state = None
         if self.config.MODEL.TRANSITION.ENABLED:
             input_transition_states = state[:, :-1].contiguous().view(b * (s - 1), c, h, w)
             input_transition_actions = predicted_actions[:, :-1].contiguous().view(b * (s - 1), -1)
-            predicted_states = self.transition_model(input_transition_states, input_transition_actions)
-            predicted_states = predicted_states.view(b, s-1, c, h, w)
+            future_state = self.transition_model(input_transition_states, input_transition_actions)
+            future_state = future_state.view(b, s-1, c, h, w)
 
-        return predicted_actions, predicted_states
+        return predicted_actions, future_state, state
 
     def shared_step(self, batch, is_train, optimizer_idx=0):
-        predicted_actions, predicted_states = self.forward(batch)
+        predicted_actions, future_state, state = self.forward(batch)
 
-        action_loss = self.policy_loss(predicted_actions, batch['action'])
-        # b, s = predicted_actions.shape[:2]
-        # brake_loss = self.brake_loss(predicted_actions[..., 2:].contiguous().view(b*s, -1),
-        #                              batch['brake'].view(b*s)
-        #                              )
+        # Policy loss
+        action_loss = self.policy_loss(predicted_actions, batch['action'][:, (self.receptive_field - 1):])
 
+        # Future prediction loss
         future_prediction_loss = action_loss.new_zeros(1)
         if self.config.MODEL.TRANSITION.ENABLED:
-            target_states = torch.argmax(batch['bev'][:, 1:], dim=-3)
-            future_prediction_loss = self.segmentation_loss(predicted_states, target_states)
+            #target_states = torch.argmax(batch['bev'][:, 1:], dim=-3)
+            future_prediction_loss = self.future_pred_loss(future_state, state[:, 1:])
 
         losses = {'future_prediction': future_prediction_loss,
                   'action': action_loss,
