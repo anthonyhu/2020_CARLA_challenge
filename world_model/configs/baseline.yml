@@ -1,13 +1,13 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/future_pred'
-TAG: 'baseline_transition'
+TAG: 'baseline_transition_seqlen=2'
 
 GPUS: [0, 1]
 
-BATCHSIZE: 6
+BATCHSIZE: 18
 PRECISION: 32
 EPOCHS: 50
 
-SEQUENCE_LENGTH: 6
+SEQUENCE_LENGTH: 2
 
 MODEL:
   TRANSITION:

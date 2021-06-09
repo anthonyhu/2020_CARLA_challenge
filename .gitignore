@@ -4,5 +4,6 @@ sample_data/
 checkpoints/
 *.ipynb
 .ipynb_checkpoints/
+/experiments/
 
 __pycache__/

@@ -1,10 +1,11 @@
 _BASE_: 'baseline.yml'
 
-TAG: 'policy_only'
+TAG: 'policy_only_mixed_precision'
 
 GPUS: [0, 1]
 
 BATCHSIZE: 64
+PRECISION: 16
 
 SEQUENCE_LENGTH: 1
 

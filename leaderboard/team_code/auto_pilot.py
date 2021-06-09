@@ -83,7 +83,8 @@ class AutoPilot(MapAgent):
         if path_to_conf_file:
             now = datetime.datetime.now()
             #string = pathlib.Path(os.environ['ROUTES']).stem + '_'
-            string = '_'.join(map(lambda x: '%02d' % x, (now.month, now.day, now.hour, now.minute, now.second)))
+            string = str(np.random.randint(100))  # to avoid conflict when several process want to create same name
+            string += '_'.join(map(lambda x: '%02d' % x, (now.month, now.day, now.hour, now.minute, now.second)))
 
             self.save_path = pathlib.Path(path_to_conf_file) / string
             print(f'Saving in {self.save_path}')
