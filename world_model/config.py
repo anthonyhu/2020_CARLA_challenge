@@ -55,6 +55,7 @@ _C.RECEPTIVE_FIELD = 1
 
 _C.IMAGE = CN()
 _C.IMAGE.DIM = (256, 256)
+#_C.IMAGE.FINAL_DIM = (1, 1)
 
 _C.LIFT = CN()  # image to BEV lifting
 _C.LIFT.X_BOUND = [-50.0, 50.0, 0.5]  # Forward

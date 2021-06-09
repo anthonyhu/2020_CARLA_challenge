@@ -24,7 +24,9 @@ class WorldModelTrainer(pl.LightningModule):
         # Model
         self.receptive_field = self.config.RECEPTIVE_FIELD
         if self.receptive_field == 1:
-            self.temporal_model = TemporalModelIdentity
+            self.temporal_model = TemporalModelIdentity(
+                in_channels=self.config.MODEL.IN_CHANNELS, receptive_field=self.receptive_field,
+            )
         else:
             self.temporal_model = TemporalModel(
                 in_channels=self.config.MODEL.IN_CHANNELS, receptive_field=self.receptive_field,
