@@ -69,12 +69,15 @@ class WorldModelAgent(MapAgent):
         self.world_model = WorldModelTrainer.load_from_checkpoint(path_to_conf_file)
         self.world_model.cuda()
         self.world_model.eval()
+        print(f'Model receptive field: {self.world_model.receptive_field}')
 
     def _init(self):
         super()._init()
 
         #self._turn_controller = PIDController(K_P=1.25, K_I=0.75, K_D=0.3, n=40)
         self._speed_controller = PIDController(K_P=5.0, K_I=0.5, K_D=1.0, n=10) #n=40
+
+        self.batch_buffer = None
 
     def tick(self, input_data):
         result = super().tick(input_data)
@@ -87,7 +90,6 @@ class WorldModelAgent(MapAgent):
 
         return result
 
-    @torch.no_grad()
     def run_step(self, input_data, timestamp):
         if not self.initialized:
             self._init()
@@ -105,15 +107,28 @@ class WorldModelAgent(MapAgent):
         # input speed
         input_speed = torch.FloatTensor([tick_data['speed']]).unsqueeze(0).cuda()
 
-        action = self.world_model.policy(bev, route_command, input_speed)
+        batch = {'bev': bev.unsqueeze(1),
+                 'route_command': route_command.unsqueeze(1),
+                 'speed': input_speed.unsqueeze(1)
+                 }
 
-        if self.world_model.config.MODEL.TRANSITION.ENABLED:
-            next_state = self.world_model.transition_model(bev, action)
-        else:
-            next_state = torch.zeros_like(bev)
+        if self.batch_buffer is None:
+            self.batch_buffer = {}
+            for key, value in batch.items():
+                self.batch_buffer[key] = torch.cat([value] * self.world_model.receptive_field, dim=1)
 
-        predicted_steering = action[0, 0].item()
-        desired_speed = action[0, 1].item()
+        else:  # shift values and add new one
+            for key, value in batch.items():
+                self.batch_buffer[key] = torch.cat([self.batch_buffer[key][:, 1:]] + [value], dim=1)
+
+        with torch.no_grad():
+            action, future_state, _ = self.world_model(self.batch_buffer, deployment=True)
+
+        if future_state is None:
+            future_state = torch.zeros_like(bev)
+
+        predicted_steering = action[0, -1, 0].item()
+        desired_speed = action[0, -1, 1].item()
 
         steer = predicted_steering# self._turn_controller.step(predicted_steering)
         if steer < -1.0 or steer > 1.0:
@@ -136,7 +151,7 @@ class WorldModelAgent(MapAgent):
 
         if DEBUG:
             debug_display(
-                    tick_data, bev[0].cpu().numpy(), next_state[0].cpu().numpy(),
+                    tick_data, bev[0].cpu().numpy(), future_state[0, -1].cpu().numpy(),
                     steer, throttle, brake, desired_speed, tick_data['command'].name,
                     self.step, self.save_path)
 

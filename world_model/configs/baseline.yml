@@ -3,7 +3,7 @@ TAG: 'baseline_transition_seqlen=2_fp=16_temporal_model'
 
 GPUS: [0, 1]
 
-BATCHSIZE: 16
+BATCHSIZE: 10
 PRECISION: 16
 EPOCHS: 50
 

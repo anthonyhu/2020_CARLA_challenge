@@ -69,7 +69,16 @@ class WorldModelTrainer(pl.LightningModule):
 
         set_bn_momentum(self, self.config.MODEL.BN_MOMENTUM)
 
-    def forward(self, batch):
+    def forward(self, batch, deployment=False):
+        """
+        Parameters
+        ----------
+            batch: dict of torch.Tensor
+                keys:
+                    'bev' (b, s, c, h, w)
+                    'route_command' (b, s, c_route)
+                    'speed' (b, s, 1)
+        """
         # Temporal model
         state = self.temporal_model(batch['bev'])
 
@@ -85,10 +94,17 @@ class WorldModelTrainer(pl.LightningModule):
         # Future prediction
         future_state = None
         if self.config.MODEL.TRANSITION.ENABLED:
-            input_transition_states = state[:, :-1].contiguous().view(b * (s - 1), c, h, w)
-            input_transition_actions = predicted_actions[:, :-1].contiguous().view(b * (s - 1), -1)
-            future_state = self.transition_model(input_transition_states, input_transition_actions)
-            future_state = future_state.view(b, s-1, c, h, w)
+            if deployment:
+                # Predict next future state
+                input_transition_states = state[:, -1]
+                input_transition_actions = predicted_actions[:, -1]
+                future_state = self.transition_model(input_transition_states, input_transition_actions)
+                future_state = future_state.view(b, 1, c, h, w)
+            else:
+                input_transition_states = state[:, :-1].contiguous().view(b * (s - 1), c, h, w)
+                input_transition_actions = predicted_actions[:, :-1].contiguous().view(b * (s - 1), -1)
+                future_state = self.transition_model(input_transition_states, input_transition_actions)
+                future_state = future_state.view(b, s-1, c, h, w)
 
         return predicted_actions, future_state, state
 
