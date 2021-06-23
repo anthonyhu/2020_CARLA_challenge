@@ -1,13 +1,12 @@
 _BASE_: 'baseline.yml'
 
-TAG: 'policy_only_mixed_precision_temporal_model'
+TAG: 'policy_only'
 
 GPUS: [0, 1]
 
 BATCHSIZE: 36
-PRECISION: 16
 
-SEQUENCE_LENGTH: 3
+SEQUENCE_LENGTH: 1
 
 MODEL:
   POLICY:

@@ -1,5 +1,5 @@
-LOG_DIR: '/home/mifs/ah2029/experiments/carla/future_pred'
-TAG: 'baseline_transition_seqlen=2_fp=16_temporal_model'
+LOG_DIR: '/home/mifs/ah2029/experiments/carla/latent_state'
+TAG: 'baseline_transition_seqlen=2_fp=16'
 
 GPUS: [0, 1]
 
@@ -7,8 +7,8 @@ BATCHSIZE: 10
 PRECISION: 16
 EPOCHS: 50
 
-SEQUENCE_LENGTH: 4
-RECEPTIVE_FIELD: 3
+SEQUENCE_LENGTH: 2
+RECEPTIVE_FIELD: 1
 
 MODEL:
   TRANSITION:

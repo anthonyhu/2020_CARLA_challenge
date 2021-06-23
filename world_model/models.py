@@ -67,30 +67,19 @@ class TemporalModelIdentity(nn.Module):
         return x[:, (self.receptive_field - 1):].contiguous()
 
 
-class Policy(nn.Module):
-    def __init__(self, in_channels=64, out_channels=4, command_channels=6, speed_as_input=False,
-                 name='efficientnet-b0'):
+class Encoder(nn.Module):
+    def __init__(self, in_channels=64, out_channels=256, name='efficientnet-b0'):
         super().__init__()
-        self.command_channels = command_channels
-        self.speed_as_input = speed_as_input
 
         self.backbone = EfficientNet.from_pretrained(name)
         self.backbone._conv_stem = nn.Conv2d(
-            in_channels + command_channels, 32, kernel_size=3, stride=2, bias=False, padding=1
+            in_channels, 32, kernel_size=3, stride=2, bias=False, padding=1
         )
 
-        self.output_net = nn.Sequential(nn.Conv2d(320, 512, kernel_size=1, bias=False),
-                                        nn.BatchNorm2d(512, momentum=0.01),
+        self.output_net = nn.Sequential(nn.Conv2d(320, out_channels, kernel_size=1, bias=False),
+                                        nn.BatchNorm2d(out_channels, momentum=0.01),
                                         self.backbone._swish,
-                                        nn.AdaptiveAvgPool2d(output_size=1),
-                                        nn.Flatten(),
-                                        ActivatedNormLinear(512, 128),
                                         )
-        speed_channels = 1 if self.speed_as_input else 0
-        self.last_layer = nn.Linear(128 + command_channels + speed_channels, out_channels)
-
-        #self.steering_activation = RestrictionActivation(min_value=-1, max_value=1)
-        #self.throttle_activation = RestrictionActivation(min_value=0, max_value=0.75)
 
         self.delete_unused_layers()
 
@@ -121,6 +110,34 @@ class Policy(nn.Module):
 
         return x
 
+    def forward(self, x):
+        x = self.get_features(x)
+        return self.output_net(x)
+
+
+class Policy(nn.Module):
+    def __init__(self, in_channels=64, out_channels=4, command_channels=6, speed_as_input=False,
+                 name='efficientnet-b0'):
+        super().__init__()
+        self.command_channels = command_channels
+        self.speed_as_input = speed_as_input
+
+        speed_channels = 1 if self.speed_as_input else 0
+
+        self.module = nn.Sequential(
+            nn.Conv2d(in_channels + command_channels + speed_channels, 512, kernel_size=1, bias=False),
+            nn.BatchNorm2d(512, momentum=0.01),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d(output_size=1),
+            nn.Flatten(),
+            ActivatedNormLinear(512, 128),
+            nn.Linear(128, out_channels)
+        )
+
+
+        #self.steering_activation = RestrictionActivation(min_value=-1, max_value=1)
+        #self.throttle_activation = RestrictionActivation(min_value=0, max_value=0.75)
+
     def forward(self, x, route_commands, speed):
         # concatenate route_commands
         b, c, h, w = x.shape
@@ -128,15 +145,13 @@ class Policy(nn.Module):
         # substract 1 because route commands start at 1.
         route_commands = torch.nn.functional.one_hot(route_commands.squeeze(-1) - 1, self.command_channels)
 
-        route_commands_1 = route_commands.view(b, -1, 1, 1).expand(-1, -1, h, w)
-        x = torch.cat([x, route_commands_1], dim=1)
+        route_commands = route_commands.view(b, -1, 1, 1).expand(-1, -1, h, w)
+        speed = speed.view(b, -1, 1, 1).expand(-1, -1, h, w)
 
-        x = self.get_features(x)  # get feature vector
-        x = self.output_net(x)
-        x_concat = torch.cat([x, route_commands], dim=-1)
+        x_concat = torch.cat([x, route_commands], dim=1)
         if self.speed_as_input:
-            x_concat = torch.cat([x_concat, speed], dim=-1)
-        x = self.last_layer(x_concat)
+            x_concat = torch.cat([x_concat, speed], dim=1)
+        x = self.module(x_concat)
 
         # Restrict steering and throttle output range
         #x[..., 0] = self.steering_activation(x[..., 0])

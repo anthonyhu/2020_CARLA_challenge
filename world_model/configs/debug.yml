@@ -3,7 +3,7 @@ _BASE_: 'baseline.yml'
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/debug'
 TAG: 'debug'
 
-#GPUS: [0]
+GPUS: [0]
 EPOCHS: 2
 LOGGING_INTERVAL: 10
 

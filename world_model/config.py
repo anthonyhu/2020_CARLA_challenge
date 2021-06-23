@@ -55,7 +55,6 @@ _C.RECEPTIVE_FIELD = 1
 
 _C.IMAGE = CN()
 _C.IMAGE.DIM = (256, 256)
-#_C.IMAGE.FINAL_DIM = (1, 1)
 
 _C.LIFT = CN()  # image to BEV lifting
 _C.LIFT.X_BOUND = [-50.0, 50.0, 0.5]  # Forward
@@ -74,8 +73,6 @@ _C.MODEL.TEMPORAL_MODEL.OUTPUT_DIM = 16
 
 _C.MODEL.POLICY = CN()
 _C.MODEL.POLICY.SPEED_INPUT = False
-#_C.MODEL.POLICY.NAME = 'efficientnet-b0'
-#_C.MODEL.POLICY.OUT_CHANNELS = 64
 
 _C.MODEL.TRANSITION = CN()
 _C.MODEL.TRANSITION.ENABLED = False
@@ -94,6 +91,12 @@ _C.OPTIMIZER = CN()
 _C.OPTIMIZER.LR = 3e-4
 _C.OPTIMIZER.WEIGHT_DECAY = 1e-7
 _C.GRAD_NORM_CLIP = 5
+
+
+# Backward compatibility
+# _C.IMAGE.FINAL_DIM = (1, 1)
+# _C.MODEL.POLICY.NAME = 'efficientnet-b0'
+# _C.MODEL.POLICY.OUT_CHANNELS = 64
 
 
 def get_parser():

@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 
 from world_model.config import get_cfg
 from world_model.dataset import get_dataset_sequential
-from world_model.models import TemporalModel, TemporalModelIdentity, Policy, TransitionModel, RewardModel
+from world_model.models import TemporalModel, TemporalModelIdentity, Encoder, Policy, TransitionModel, RewardModel
 from world_model.losses import RegressionLoss, SegmentationLoss
 from world_model.utils import set_bn_momentum
 
@@ -35,7 +35,11 @@ class WorldModelTrainer(pl.LightningModule):
 
         state_in_channel = self.temporal_model.out_channels
 
-        self.policy = Policy(in_channels=state_in_channel,
+        self.encoder = Encoder(in_channels=state_in_channel,
+                               out_channels=256,
+                               )
+
+        self.policy = Policy(in_channels=256,
                              out_channels=self.config.MODEL.ACTION_DIM,
                              command_channels=self.config.MODEL.COMMAND_DIM,
                              speed_as_input=self.config.MODEL.POLICY.SPEED_INPUT,
@@ -44,7 +48,7 @@ class WorldModelTrainer(pl.LightningModule):
         if self.config.MODEL.TRANSITION.ENABLED:
             print('Enabled: Next state prediction')
             self.transition_model = TransitionModel(
-                in_channels=state_in_channel, action_channels=self.config.MODEL.ACTION_DIM,
+                in_channels=256, action_channels=self.config.MODEL.ACTION_DIM,
             )
             # self.segmentation_loss = SegmentationLoss(
             #     use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
@@ -88,7 +92,8 @@ class WorldModelTrainer(pl.LightningModule):
         speed = batch['speed'][:, (self.receptive_field - 1):].contiguous().view(b * s, -1)
         input_policy = state.view(b*s, c, h, w)
 
-        predicted_actions = self.policy(input_policy, route_command, speed)
+        latent_state = self.encoder(input_policy)
+        predicted_actions = self.policy(latent_state, route_command, speed)
         predicted_actions = predicted_actions.view(b, s, -1)
 
         # Future prediction
@@ -101,15 +106,17 @@ class WorldModelTrainer(pl.LightningModule):
                 future_state = self.transition_model(input_transition_states, input_transition_actions)
                 future_state = future_state.view(b, 1, c, h, w)
             else:
-                input_transition_states = state[:, :-1].contiguous().view(b * (s - 1), c, h, w)
-                input_transition_actions = predicted_actions[:, :-1].contiguous().view(b * (s - 1), -1)
+                _, new_c, new_h, new_w = latent_state.shape
+                latent_state = latent_state.view(b, s, new_c, new_h, new_w)
+                input_transition_states = latent_state[:, :-1].contiguous().view(b * (s - 1), new_c, new_h, new_w)
+                input_transition_actions = batch['action'][:, :-1].contiguous().view(b * (s - 1), -1)
                 future_state = self.transition_model(input_transition_states, input_transition_actions)
-                future_state = future_state.view(b, s-1, c, h, w)
+                future_state = future_state.view(b, s-1, new_c, new_h, new_w)
 
-        return predicted_actions, future_state, state
+        return predicted_actions, future_state, latent_state
 
     def shared_step(self, batch, is_train, optimizer_idx=0):
-        predicted_actions, future_state, state = self.forward(batch)
+        predicted_actions, future_state, latent_state = self.forward(batch)
 
         # Policy loss
         action_loss = self.policy_loss(predicted_actions, batch['action'][:, (self.receptive_field - 1):])
@@ -118,7 +125,7 @@ class WorldModelTrainer(pl.LightningModule):
         future_prediction_loss = action_loss.new_zeros(1)
         if self.config.MODEL.TRANSITION.ENABLED:
             #target_states = torch.argmax(batch['bev'][:, 1:], dim=-3)
-            future_prediction_loss = self.future_pred_loss(future_state, state[:, 1:])
+            future_prediction_loss = self.future_pred_loss(future_state, latent_state[:, 1:])
 
         losses = {'future_prediction': future_prediction_loss,
                   'action': action_loss,
