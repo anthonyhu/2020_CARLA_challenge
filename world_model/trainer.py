@@ -6,8 +6,9 @@ import pytorch_lightning as pl
 
 from world_model.config import get_cfg
 from world_model.dataset import get_dataset_sequential
-from world_model.models import TemporalModel, TemporalModelIdentity, Encoder, Policy, TransitionModel, RewardModel
-from world_model.losses import RegressionLoss, SegmentationLoss
+from world_model.models import TemporalModel, TemporalModelIdentity, Encoder, Policy, TransitionModel, RewardModel, \
+    Distribution
+from world_model.losses import RegressionLoss, SegmentationLoss, ProbabilisticLoss
 from world_model.utils import set_bn_momentum
 
 
@@ -21,25 +22,45 @@ class WorldModelTrainer(pl.LightningModule):
         # Dataset
         self.dataset_path = os.path.join(self.config.DATASET.DATAROOT, self.config.DATASET.VERSION)
 
+        #####
         # Model
+        #####
+
+        # Encoder
+        self.encoder = Encoder(
+            in_channels=self.config.MODEL.IN_CHANNELS, out_channels=self.config.MODEL.ENCODER.OUTPUT_DIM,
+        )
+
+        # Temporal model
         self.receptive_field = self.config.RECEPTIVE_FIELD
         if self.receptive_field == 1:
             self.temporal_model = TemporalModelIdentity(
-                in_channels=self.config.MODEL.IN_CHANNELS, receptive_field=self.receptive_field,
+                in_channels=self.config.MODEL.ENCODER.OUTPUT_DIM, receptive_field=self.receptive_field,
             )
         else:
             self.temporal_model = TemporalModel(
-                in_channels=self.config.MODEL.IN_CHANNELS, receptive_field=self.receptive_field,
+                in_channels=self.config.MODEL.ENCODER.OUTPUT_DIM, receptive_field=self.receptive_field,
                 input_shape=self.config.IMAGE.DIM, start_out_channels=self.config.MODEL.TEMPORAL_MODEL.OUTPUT_DIM,
             )
 
-        state_in_channel = self.temporal_model.out_channels
+        state_channels = self.temporal_model.out_channels
+        whole_state_channels = state_channels
+        if self.config.MODEL.PROBABILISTIC.ENABLED:
+            # Input: s_t
+            self.present_distribution = Distribution(
+                in_channels=state_channels, latent_dim=self.config.MODEL.PROBABILISTIC.LATENT_DIM
+            )
 
-        self.encoder = Encoder(in_channels=state_in_channel,
-                               out_channels=256,
-                               )
+            # Input: [s_t, s_{t+1}]
+            self.future_distribution = Distribution(
+                in_channels=2*state_channels, latent_dim=self.config.MODEL.PROBABILISTIC.LATENT_DIM
+            )
 
-        self.policy = Policy(in_channels=256,
+            whole_state_channels += self.config.MODEL.PROBABILISTIC.LATENT_DIM
+
+            self.probabilistic_loss = ProbabilisticLoss()
+
+        self.policy = Policy(in_channels=whole_state_channels,
                              out_channels=self.config.MODEL.ACTION_DIM,
                              command_channels=self.config.MODEL.COMMAND_DIM,
                              speed_as_input=self.config.MODEL.POLICY.SPEED_INPUT,
@@ -48,7 +69,8 @@ class WorldModelTrainer(pl.LightningModule):
         if self.config.MODEL.TRANSITION.ENABLED:
             print('Enabled: Next state prediction')
             self.transition_model = TransitionModel(
-                in_channels=256, action_channels=self.config.MODEL.ACTION_DIM,
+                in_channels=whole_state_channels, action_channels=self.config.MODEL.ACTION_DIM,
+                out_channels=self.config.MODEL.ENCODER.OUTPUT_DIM,
             )
             # self.segmentation_loss = SegmentationLoss(
             #     use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
@@ -83,43 +105,78 @@ class WorldModelTrainer(pl.LightningModule):
                     'route_command' (b, s, c_route)
                     'speed' (b, s, 1)
         """
+        # Encoder
+        b, s, img_c, img_h, img_w = batch['bev'].shape
+        encoded_inputs = self.encoder(batch['bev'].view(b*s, img_c, img_h, img_w))
+        _, enc_c, enc_h, enc_w = encoded_inputs.shape
+        encoded_inputs = encoded_inputs.view(b, s, enc_c, enc_h, enc_w)
         # Temporal model
-        state = self.temporal_model(batch['bev'])
+        latent_state = self.temporal_model(encoded_inputs)
 
         # Policy
-        b, s, c, h, w = state.shape
-        route_command = batch['route_command'][:, (self.receptive_field - 1):].contiguous().view(b * s, -1)
-        speed = batch['speed'][:, (self.receptive_field - 1):].contiguous().view(b * s, -1)
-        input_policy = state.view(b*s, c, h, w)
+        b, s, c, h, w = latent_state.shape
+        route_command = batch['route_command'][:, (self.receptive_field - 1):self.receptive_field].contiguous().view(b, -1)
+        speed = batch['speed'][:, (self.receptive_field - 1):self.receptive_field].contiguous().view(b, -1)
 
-        latent_state = self.encoder(input_policy)
-        predicted_actions = self.policy(latent_state, route_command, speed)
-        predicted_actions = predicted_actions.view(b, s, -1)
+        distribution_output = None
+
+        policy_input = latent_state[:, :-1].contiguous()
+        if self.config.MODEL.PROBABILISTIC.ENABLED:
+            distribution_output = self.distribution_forward(latent_state)
+
+            policy_input = self.add_stochastic_state(policy_input, distribution_output, deployment)
+
+        predicted_actions = self.policy(policy_input[:, 0], route_command, speed)
+        predicted_actions = predicted_actions.view(b, 1, -1)
 
         # Future prediction
         future_state = None
         if self.config.MODEL.TRANSITION.ENABLED:
             if deployment:
-                # Predict next future state
-                input_transition_states = state[:, -1]
-                input_transition_actions = predicted_actions[:, -1]
-                future_state = self.transition_model(input_transition_states, input_transition_actions)
-                future_state = future_state.view(b, 1, c, h, w)
+                future_state = torch.zeros_like(latent_state)
             else:
-                _, new_c, new_h, new_w = latent_state.shape
-                latent_state = latent_state.view(b, s, new_c, new_h, new_w)
-                input_transition_states = latent_state[:, :-1].contiguous().view(b * (s - 1), new_c, new_h, new_w)
-                input_transition_actions = batch['action'][:, :-1].contiguous().view(b * (s - 1), -1)
+                input_transition_states = policy_input.view(b, -1, h, w)
+                input_transition_actions = batch['action'][:, :-1].contiguous().view(b, -1)
                 future_state = self.transition_model(input_transition_states, input_transition_actions)
-                future_state = future_state.view(b, s-1, new_c, new_h, new_w)
+                future_state = future_state.view(b, 1, -1, h, w)
 
-        return predicted_actions, future_state, latent_state
+        return predicted_actions, future_state, latent_state, distribution_output
+
+    def distribution_forward(self, latent_state):
+        assert latent_state.shape[1] == 2, 'Need two states. The sequence length is too short.'
+        output = dict()
+
+        output['present_mu'], output['present_log_sigma'] = self.present_distribution(latent_state[:, 0])
+
+        b, s, c, h, w = latent_state.shape
+        output['future_mu'], output['future_log_sigma'] = self.future_distribution(latent_state.view(b, s*c, h, w))
+
+        return output
+
+    def add_stochastic_state(self, policy_input, distribution_output, deployment):
+        if not deployment:
+            mu = distribution_output['future_mu']
+            sigma = torch.exp(distribution_output['future_log_sigma'])
+        else:
+            mu = distribution_output['present_mu']
+            sigma = torch.exp(distribution_output['present_log_sigma'])
+
+        noise = torch.randn_like(mu)
+        sample = mu + sigma * noise
+
+        b, _, _, h, w = policy_input.shape
+        latent_dim = sample.shape[1]
+        # Spatially broadcast sample to the dimensions of present_features
+        sample = sample.view(b, 1, latent_dim, 1, 1).expand(b, 1, latent_dim, h, w)
+
+        policy_input = torch.cat([policy_input, sample], dim=2)
+        return policy_input
 
     def shared_step(self, batch, is_train, optimizer_idx=0):
-        predicted_actions, future_state, latent_state = self.forward(batch)
+        predicted_actions, future_state, latent_state, distribution_output = self.forward(batch)
 
         # Policy loss
-        action_loss = self.policy_loss(predicted_actions, batch['action'][:, (self.receptive_field - 1):])
+        action_loss = self.policy_loss(predicted_actions, batch['action'][:, (self.receptive_field - 1):self.receptive_field])
 
         # Future prediction loss
         future_prediction_loss = action_loss.new_zeros(1)
@@ -127,8 +184,13 @@ class WorldModelTrainer(pl.LightningModule):
             #target_states = torch.argmax(batch['bev'][:, 1:], dim=-3)
             future_prediction_loss = self.future_pred_loss(future_state, latent_state[:, 1:])
 
+        probabilistic_loss = action_loss.new_zeros(1)
+        if self.config.MODEL.PROBABILISTIC.ENABLED:
+            probabilistic_loss = self.probabilistic_loss(distribution_output)
+
         losses = {'future_prediction': future_prediction_loss,
                   'action': action_loss,
+                  'probabilistic': probabilistic_loss,
                   #'brake': brake_loss,
                   }
 

@@ -1,9 +1,9 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/latent_state'
 TAG: 'baseline_transition_seqlen=2_fp=16'
 
-GPUS: [0, 1]
+GPUS: [0]
 
-BATCHSIZE: 10
+BATCHSIZE: 64
 PRECISION: 16
 EPOCHS: 50
 

@@ -160,8 +160,30 @@ class Policy(nn.Module):
         return x
 
 
+class Distribution(nn.Module):
+    def __init__(self, in_channels=512, latent_dim=32):
+        super().__init__()
+        self.latent_dim = latent_dim
+
+        self.module = nn.Sequential(
+            nn.Conv2d(in_channels, 512, kernel_size=1, bias=False),
+            nn.BatchNorm2d(512, momentum=0.01),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d(output_size=1),
+            nn.Flatten(),
+            ActivatedNormLinear(512, 256),
+            ActivatedNormLinear(256, 128),
+            nn.Linear(128, 2*latent_dim)
+        )
+
+    def forward(self, x):
+        output = self.module(x)
+        mean, std = output[..., :self.latent_dim].contiguous(), output[..., self.latent_dim:].contiguous()
+        return mean, std
+
+
 class TransitionModel(nn.Module):
-    def __init__(self, in_channels, action_channels=4):
+    def __init__(self, in_channels, action_channels=4, out_channels=256):
         super().__init__()
         backbone = resnet18(pretrained=False, zero_init_residual=True)
         self.first_conv = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -181,7 +203,7 @@ class TransitionModel(nn.Module):
             nn.Conv2d(shared_out_channels, shared_out_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(shared_out_channels),
             nn.ReLU(inplace=True),
-            nn.Conv2d(shared_out_channels, in_channels, kernel_size=1, padding=0),
+            nn.Conv2d(shared_out_channels, out_channels, kernel_size=1, padding=0),
         )
 
     def forward(self, x, action):

@@ -2,9 +2,9 @@ _BASE_: 'baseline.yml'
 
 TAG: 'policy_only'
 
-GPUS: [0, 1]
+GPUS: [0]
 
-BATCHSIZE: 36
+BATCHSIZE: 128
 
 SEQUENCE_LENGTH: 1
 

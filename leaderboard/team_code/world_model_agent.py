@@ -124,8 +124,8 @@ class WorldModelAgent(MapAgent):
         with torch.no_grad():
             action, future_state, _ = self.world_model(self.batch_buffer, deployment=True)
 
-        if future_state is None:
-            future_state = torch.zeros_like(bev)
+        # do not visualise future states
+        future_state = torch.zeros_like(bev)
 
         predicted_steering = action[0, -1, 0].item()
         desired_speed = action[0, -1, 1].item()
