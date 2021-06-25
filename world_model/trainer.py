@@ -40,7 +40,7 @@ class WorldModelTrainer(pl.LightningModule):
         else:
             self.temporal_model = TemporalModel(
                 in_channels=self.config.MODEL.ENCODER.OUTPUT_DIM, receptive_field=self.receptive_field,
-                input_shape=self.config.IMAGE.DIM, start_out_channels=self.config.MODEL.TEMPORAL_MODEL.OUTPUT_DIM,
+                input_shape=(8, 8), start_out_channels=self.config.MODEL.TEMPORAL_MODEL.OUTPUT_DIM,
             )
 
         state_channels = self.temporal_model.out_channels
@@ -136,7 +136,7 @@ class WorldModelTrainer(pl.LightningModule):
                 future_state = torch.zeros_like(latent_state)
             else:
                 input_transition_states = policy_input.view(b, -1, h, w)
-                input_transition_actions = batch['action'][:, :-1].contiguous().view(b, -1)
+                input_transition_actions = batch['action'][:, (self.receptive_field - 1):self.receptive_field].contiguous().view(b, -1)
                 future_state = self.transition_model(input_transition_states, input_transition_actions)
                 future_state = future_state.view(b, 1, -1, h, w)
 
