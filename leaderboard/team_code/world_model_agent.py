@@ -122,7 +122,7 @@ class WorldModelAgent(MapAgent):
                 self.batch_buffer[key] = torch.cat([self.batch_buffer[key][:, 1:]] + [value], dim=1)
 
         with torch.no_grad():
-            action, future_state, _ = self.world_model(self.batch_buffer, deployment=True)
+            action, future_state, _, _ = self.world_model(self.batch_buffer, deployment=True)
 
         # do not visualise future states
         future_state = torch.zeros_like(bev)
@@ -141,7 +141,7 @@ class WorldModelAgent(MapAgent):
         delta = desired_speed - speed
         # delta = np.clip(delta, 0.0, 0.25)
         throttle = self._speed_controller.step(delta)
-        throttle = np.clip(throttle, 0.0, 0.75)
+        throttle = np.clip(throttle, 0.0, 1.0)
         throttle = throttle if not brake else 0.0
 
         control = carla.VehicleControl()

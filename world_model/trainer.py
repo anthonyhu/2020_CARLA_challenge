@@ -120,11 +120,14 @@ class WorldModelTrainer(pl.LightningModule):
 
         distribution_output = None
 
-        policy_input = latent_state[:, :-1].contiguous()
+        if not deployment:
+            policy_input = latent_state[:, :-1].contiguous()
+        else:
+            policy_input = latent_state
         if self.config.MODEL.PROBABILISTIC.ENABLED:
-            distribution_output = self.distribution_forward(latent_state)
+            distribution_output = self.distribution_forward(latent_state, deployment=deployment)
 
-            policy_input = self.add_stochastic_state(policy_input, distribution_output, deployment)
+            policy_input = self.add_stochastic_state(policy_input, distribution_output, deployment=deployment)
 
         predicted_actions = self.policy(policy_input[:, 0], route_command, speed)
         predicted_actions = predicted_actions.view(b, 1, -1)
@@ -142,14 +145,14 @@ class WorldModelTrainer(pl.LightningModule):
 
         return predicted_actions, future_state, latent_state, distribution_output
 
-    def distribution_forward(self, latent_state):
-        assert latent_state.shape[1] == 2, 'Need two states. The sequence length is too short.'
+    def distribution_forward(self, latent_state, deployment=False):
         output = dict()
-
         output['present_mu'], output['present_log_sigma'] = self.present_distribution(latent_state[:, 0])
 
-        b, s, c, h, w = latent_state.shape
-        output['future_mu'], output['future_log_sigma'] = self.future_distribution(latent_state.view(b, s*c, h, w))
+        if not deployment:
+            assert latent_state.shape[1] == 2, 'Need two states. The sequence length is too short.'
+            b, s, c, h, w = latent_state.shape
+            output['future_mu'], output['future_log_sigma'] = self.future_distribution(latent_state.view(b, s*c, h, w))
 
         return output
 
