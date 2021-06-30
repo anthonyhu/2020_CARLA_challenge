@@ -1,8 +1,6 @@
 _BASE_: 'baseline.yml'
 
-TAG: 'policy_only'
-
-GPUS: [0]
+TAG: 'policy_only_speed'
 
 BATCHSIZE: 128
 
@@ -10,6 +8,6 @@ SEQUENCE_LENGTH: 1
 
 MODEL:
   POLICY:
-    SPEED_INPUT: False
+    SPEED_INPUT: True
   TRANSITION:
     ENABLED: False

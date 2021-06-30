@@ -1,8 +1,8 @@
 _BASE_: 'baseline.yml'
 
-TAG: 'probabilistic_temporal_2gpus'
+TAG: 'temporal_1gpus'
 
-GPUS: [0, 1]
+GPUS: [0]
 
 BATCHSIZE: 36
 
@@ -13,6 +13,6 @@ MODEL:
   TEMPORAL_MODEL:
     OUTPUT_DIM: 256
   PROBABILISTIC:
-    ENABLED: True
+    ENABLED: False
 
 

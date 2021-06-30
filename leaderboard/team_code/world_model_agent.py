@@ -128,7 +128,7 @@ class WorldModelAgent(MapAgent):
         future_state = torch.zeros_like(bev)
 
         predicted_steering = action[0, -1, 0].item()
-        desired_speed = action[0, -1, 1].item()
+        predicted_throttle = action[0, -1, 1].item()
 
         steer = predicted_steering# self._turn_controller.step(predicted_steering)
         if steer < -1.0 or steer > 1.0:
@@ -136,12 +136,9 @@ class WorldModelAgent(MapAgent):
         steer = np.clip(steer, -1.0, 1.0)
 
         speed = tick_data['speed']
-        brake = desired_speed < 0.1 or (speed / desired_speed) > 1.2
+        brake = predicted_throttle < 0.1
 
-        delta = desired_speed - speed
-        # delta = np.clip(delta, 0.0, 0.25)
-        throttle = self._speed_controller.step(delta)
-        throttle = np.clip(throttle, 0.0, 1.0)
+        throttle = np.clip(predicted_throttle, 0.0, 1.0)
         throttle = throttle if not brake else 0.0
 
         control = carla.VehicleControl()
@@ -152,7 +149,7 @@ class WorldModelAgent(MapAgent):
         if DEBUG:
             debug_display(
                     tick_data, bev[0].cpu().numpy(), future_state[0, -1].cpu().numpy(),
-                    steer, throttle, brake, desired_speed, tick_data['command'].name,
+                    steer, throttle, brake, speed, tick_data['command'].name,
                     self.step, self.save_path)
 
         return control

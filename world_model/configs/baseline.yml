@@ -1,7 +1,7 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/throttle'
 TAG: 'baseline'
 
-GPUS: [0]
+GPUS: [0, 1]
 
 BATCHSIZE: 64
 PRECISION: 16
