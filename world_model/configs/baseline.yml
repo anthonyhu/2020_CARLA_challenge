@@ -1,5 +1,5 @@
-LOG_DIR: '/home/mifs/ah2029/experiments/carla/latent_state'
-TAG: 'baseline_transition_seqlen=2_fp=16'
+LOG_DIR: '/home/mifs/ah2029/experiments/carla/throttle'
+TAG: 'baseline'
 
 GPUS: [0]
 

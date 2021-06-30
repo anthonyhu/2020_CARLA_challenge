@@ -120,7 +120,7 @@ class WorldModelTrainer(pl.LightningModule):
 
         distribution_output = None
 
-        if not deployment:
+        if not deployment and self.config.MODEL.TRANSITION.ENABLED:
             policy_input = latent_state[:, :-1].contiguous()
         else:
             policy_input = latent_state
