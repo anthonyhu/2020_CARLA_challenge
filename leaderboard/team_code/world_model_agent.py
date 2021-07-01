@@ -17,6 +17,8 @@ from team_code.pid_controller import PIDController
 
 DEBUG = int(os.environ.get('HAS_DISPLAY', 0))
 SAVE_FRAMES = True
+GAME_FPS = 20
+MODEL_FPS = 2
 ROUTE_NAME = 'route_05'
 
 
@@ -67,6 +69,13 @@ class WorldModelAgent(MapAgent):
         self.converter = Converter()
         self.save_path = os.path.dirname(path_to_conf_file)
         self.world_model = WorldModelTrainer.load_from_checkpoint(path_to_conf_file)
+
+        # When model fps is different with game fps
+        self.fps_ratio = GAME_FPS // MODEL_FPS
+        self.buffer_size = self.fps_ratio * (self.world_model.receptive_field - 1) + 1
+        print(f'fps ratio: {self.fps_ratio}')
+        print(f'buffer size: {self.buffer_size}')
+
         self.world_model.cuda()
         self.world_model.eval()
         print(f'Model receptive field: {self.world_model.receptive_field}')
@@ -115,14 +124,19 @@ class WorldModelAgent(MapAgent):
         if self.batch_buffer is None:
             self.batch_buffer = {}
             for key, value in batch.items():
-                self.batch_buffer[key] = torch.cat([value] * self.world_model.receptive_field, dim=1)
+                self.batch_buffer[key] = torch.cat([value] * self.buffer_size, dim=1)
 
         else:  # shift values and add new one
             for key, value in batch.items():
                 self.batch_buffer[key] = torch.cat([self.batch_buffer[key][:, 1:]] + [value], dim=1)
 
+        model_input = dict()
+        # Filter values to include world model fps
+        for key, value in self.batch_buffer.items():
+            model_input[key] = value[:, ::self.fps_ratio].contiguous()
+
         with torch.no_grad():
-            action, future_state, _, _ = self.world_model(self.batch_buffer, deployment=True)
+            action, future_state, _, _ = self.world_model(model_input, deployment=True)
 
         # do not visualise future states
         future_state = torch.zeros_like(bev)
