@@ -95,6 +95,8 @@ class WorldModelTrainer(pl.LightningModule):
 
         set_bn_momentum(self, self.config.MODEL.BN_MOMENTUM)
 
+        self.training_step_count = 0
+
     def forward(self, batch, deployment=False):
         """
         Parameters
@@ -143,7 +145,15 @@ class WorldModelTrainer(pl.LightningModule):
                 future_state = self.transition_model(input_transition_states, input_transition_actions)
                 future_state = future_state.view(b, 1, -1, h, w)
 
-        return predicted_actions, future_state, latent_state, distribution_output
+        output = {'action': predicted_actions,
+                  'future_state': future_state,
+                  'latent_state': latent_state,
+        }
+
+        if self.config.MODEL.PROBABILISTIC.ENABLED:
+            output = {**output, **distribution_output}
+
+        return output
 
     def distribution_forward(self, latent_state, deployment=False):
         output = dict()
@@ -176,20 +186,22 @@ class WorldModelTrainer(pl.LightningModule):
         return policy_input
 
     def shared_step(self, batch, is_train, optimizer_idx=0):
-        predicted_actions, future_state, latent_state, distribution_output = self.forward(batch)
+        output = self.forward(batch)
 
         # Policy loss
-        action_loss = self.policy_loss(predicted_actions, batch['action'][:, (self.receptive_field - 1):self.receptive_field])
+        action_loss = self.policy_loss(
+            output['action'], batch['action'][:, (self.receptive_field - 1):self.receptive_field]
+        )
 
         # Future prediction loss
         future_prediction_loss = action_loss.new_zeros(1)
         if self.config.MODEL.TRANSITION.ENABLED:
             #target_states = torch.argmax(batch['bev'][:, 1:], dim=-3)
-            future_prediction_loss = self.future_pred_loss(future_state, latent_state[:, 1:])
+            future_prediction_loss = self.future_pred_loss(output['future_state'], output['latent_state'][:, 1:])
 
         probabilistic_loss = action_loss.new_zeros(1)
         if self.config.MODEL.PROBABILISTIC.ENABLED:
-            probabilistic_loss = self.probabilistic_loss(distribution_output)
+            probabilistic_loss = self.probabilistic_loss(output)
 
         losses = {'future_prediction': future_prediction_loss,
                   'action': action_loss,
@@ -198,10 +210,11 @@ class WorldModelTrainer(pl.LightningModule):
                   }
 
         if not self.config.MODEL.REWARD.ENABLED:
-            return losses
+            return losses, output
 
         # Train generator and discriminator
         # See blog post https://towardsdatascience.com/how-to-train-a-gan-on-128-gpus-using-pytorch-9a5b27a52c73
+        predicted_actions = output['action']
         if optimizer_idx == 0:
             valid = torch.ones(predicted_actions.size(0), 1)
             valid = valid.type_as(predicted_actions)
@@ -224,18 +237,35 @@ class WorldModelTrainer(pl.LightningModule):
 
         losses['reward_loss'] = reward_loss
 
-        return losses
+        return losses, output
 
     #def training_step(self, batch, batch_idx, optimizer_idx):
     def training_step(self, batch, batch_idx):
-        loss = self.shared_step(batch, is_train=True, optimizer_idx=0)
+        loss, output = self.shared_step(batch, is_train=True, optimizer_idx=0)
+        self.training_step_count += 1
+
+        for key, value in loss.items():
+            self.log('train_' + key, value)
+        if self.training_step_count % self.config.VIS_INTERVAL == 0:
+            pass
+            #self.visualise(batch, output, batch_idx, prefix='train')
 
         return {'loss': sum(loss.values())}
 
     def validation_step(self, batch, batch_idx):
-        loss = self.shared_step(batch, is_train=False)
+        loss, output = self.shared_step(batch, is_train=False)
+        for key, value in loss.items():
+            self.log('val_' + key, value)
 
         return {'val_loss': sum(loss.values()).item()}
+
+    def visualise(self, labels, output, batch_idx, prefix='train'):
+        # TODO
+        visualisation_video = visualise_output(labels, output, self.cfg)
+        name = f'{prefix}_outputs'
+        if prefix == 'val':
+            name = name + f'_{batch_idx}'
+        self.logger.experiment.add_video(name, visualisation_video, global_step=self.training_step_count, fps=2)
 
     def configure_optimizers(self):
         params = list(self.policy.parameters())
