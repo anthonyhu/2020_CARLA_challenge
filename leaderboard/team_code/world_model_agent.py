@@ -136,7 +136,10 @@ class WorldModelAgent(MapAgent):
             model_input[key] = value[:, ::self.fps_ratio].contiguous()
 
         with torch.no_grad():
-            action, future_state, _, _ = self.world_model(model_input, deployment=True)
+            output = self.world_model(model_input, deployment=True)
+
+        action = output['action']
+        future_state = output['future_state']
 
         # do not visualise future states
         future_state = torch.zeros_like(bev)

@@ -203,9 +203,9 @@ class WorldModelTrainer(pl.LightningModule):
         if self.config.MODEL.PROBABILISTIC.ENABLED:
             probabilistic_loss = self.probabilistic_loss(output)
 
-        losses = {'future_prediction': future_prediction_loss,
-                  'action': action_loss,
-                  'probabilistic': probabilistic_loss,
+        losses = {'future_prediction': self.config.LOSSES.WEIGHT_FUTURE_PRED * future_prediction_loss,
+                  'action': self.config.LOSSES.WEIGHT_ACTION * action_loss,
+                  'probabilistic': self.config.LOSSES.WEIGHT_PROBABILISTIC * probabilistic_loss,
                   #'brake': brake_loss,
                   }
 
@@ -261,11 +261,12 @@ class WorldModelTrainer(pl.LightningModule):
 
     def visualise(self, labels, output, batch_idx, prefix='train'):
         # TODO
-        visualisation_video = visualise_output(labels, output, self.cfg)
-        name = f'{prefix}_outputs'
-        if prefix == 'val':
-            name = name + f'_{batch_idx}'
-        self.logger.experiment.add_video(name, visualisation_video, global_step=self.training_step_count, fps=2)
+        pass
+        # visualisation_video = visualise_output(labels, output, self.config)
+        # name = f'{prefix}_outputs'
+        # if prefix == 'val':
+        #     name = name + f'_{batch_idx}'
+        # self.logger.experiment.add_video(name, visualisation_video, global_step=self.training_step_count, fps=2)
 
     def configure_optimizers(self):
         params = list(self.policy.parameters())
