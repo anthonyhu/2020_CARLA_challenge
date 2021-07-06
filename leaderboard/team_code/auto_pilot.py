@@ -83,7 +83,7 @@ class AutoPilot(MapAgent):
         if path_to_conf_file:
             now = datetime.datetime.now()
             #string = pathlib.Path(os.environ['ROUTES']).stem + '_'
-            string = str(np.random.randint(100))  # to avoid conflict when several process want to create same name
+            string = str(np.random.randint(1000))  # to avoid conflict when several process want to create same name
             string += '_'.join(map(lambda x: '%02d' % x, (now.month, now.day, now.hour, now.minute, now.second)))
 
             self.save_path = pathlib.Path(path_to_conf_file) / string
@@ -154,8 +154,8 @@ class AutoPilot(MapAgent):
         if not self.initialized:
             self._init()
 
-        if self.step % 100 == 0:
-            index = (self.step // 100) % len(WEATHERS)
+        if self.step == 0:
+            index = np.random.randint(len(WEATHERS))
             self._world.set_weather(WEATHERS[index])
 
         data = self.tick(input_data)

@@ -13,6 +13,7 @@ from PIL import Image
 from .converter import Converter, PIXELS_PER_WORLD
 from .dataset_wrapper import Wrap
 from . import common
+from world_model.utils import preprocess_semantic
 
 # Reproducibility.
 np.random.seed(0)

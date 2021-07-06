@@ -12,6 +12,7 @@ def get_entry_point():
 class MapAgent(BaseAgent):
     def sensors(self):
         result = super().sensors()
+        # Only forward bev
         # result.append({
         #     'type': 'sensor.camera.semantic_segmentation',
         #     'x': 15.0, 'y': 0.0, 'z': 70.0,
@@ -19,6 +20,8 @@ class MapAgent(BaseAgent):
         #     'width': 512, 'height': 512, 'fov': 3 * 10.0,
         #     'id': 'map'
         #     })
+
+        # Original
         result.append({
             'type': 'sensor.camera.semantic_segmentation',
             'x': 0.0, 'y': 0.0, 'z': 100.0,
