@@ -65,8 +65,6 @@ class ProbabilisticLoss(nn.Module):
                     2 * var_present)
         )
 
-        assert len(kl_div.shape) == 2
-
         kl_loss = torch.mean(torch.sum(kl_div, dim=-1))
 
         return kl_loss

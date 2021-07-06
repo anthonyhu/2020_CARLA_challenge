@@ -76,7 +76,8 @@ class Encoder(nn.Module):
             in_channels, 32, kernel_size=3, stride=2, bias=False, padding=1
         )
 
-        self.output_net = nn.Sequential(nn.Conv2d(320, out_channels, kernel_size=1, bias=False),
+        self.output_net = nn.Sequential(nn.AdaptiveAvgPool2d(1),
+                                        nn.Conv2d(320, out_channels, kernel_size=1, bias=False),
                                         nn.BatchNorm2d(out_channels, momentum=0.01),
                                         self.backbone._swish,
                                         )
@@ -112,7 +113,24 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         x = self.get_features(x)
-        return self.output_net(x)
+        x = self.output_net(x)
+        x = x.mean(dim=(-1, -2))
+        return x
+
+
+class RepresentationModel(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.model = nn.Sequential(
+            ActivatedNormLinear(in_channels, out_channels),
+            nn.Linear(out_channels, out_channels),
+        )
+
+    def forward(self, x):
+        b, s, c = x.shape
+        x = x.view(b*s, c)
+        x = self.model(x)
+        return x.view(b, s, x.shape[-1])
 
 
 class Policy(nn.Module):
@@ -182,7 +200,7 @@ class Distribution(nn.Module):
         return mean, std
 
 
-class TransitionModel(nn.Module):
+class Decoder(nn.Module):
     def __init__(self, in_channels, action_channels=4, out_channels=256):
         super().__init__()
         backbone = resnet18(pretrained=False, zero_init_residual=True)
