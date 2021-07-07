@@ -52,12 +52,7 @@ class RegressionLoss(nn.Module):
 
 
 class ProbabilisticLoss(nn.Module):
-    def forward(self, output):
-        present_mu = output['present_mu']
-        present_log_sigma = output['present_log_sigma']
-        future_mu = output['future_mu']
-        future_log_sigma = output['future_log_sigma']
-
+    def forward(self, present_mu, present_log_sigma, future_mu, future_log_sigma):
         var_future = torch.exp(2 * future_log_sigma)
         var_present = torch.exp(2 * present_log_sigma)
         kl_div = (
@@ -68,3 +63,16 @@ class ProbabilisticLoss(nn.Module):
         kl_loss = torch.mean(torch.sum(kl_div, dim=-1))
 
         return kl_loss
+
+
+class KLBalancing(nn.Module):
+    def __init__(self, alpha):
+        super().__init__()
+        self.alpha = alpha
+        self.loss = ProbabilisticLoss()
+
+    def forward(self, present_mu, present_log_sigma, future_mu, future_log_sigma):
+        prior_loss = self.loss(present_mu, present_log_sigma, future_mu.detach(), future_log_sigma.detach())
+        posterior_loss = self.loss(present_mu.detach(), present_log_sigma.detach(), future_mu, future_log_sigma)
+
+        return self.alpha * prior_loss + (1 - self.alpha) * posterior_loss

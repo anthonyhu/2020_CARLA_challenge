@@ -40,5 +40,5 @@ def preprocess_bev_state(x):
     x_out = x[..., 128:, 64:-64]
 
     # Double size
-    x_out = nn.functional.interpolate(x_out[None], scale_factor=2, mode='nearest')[0]
+    #x_out = nn.functional.interpolate(x_out[None], scale_factor=2, mode='nearest')[0]
     return x_out

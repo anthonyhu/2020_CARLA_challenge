@@ -4,7 +4,7 @@ import torch.nn as nn
 from efficientnet_pytorch import EfficientNet
 from torchvision.models.resnet import resnet18
 
-from world_model.layers import RestrictionActivation, ActivatedNormLinear, UpsamplingAdd
+from world_model.layers import RestrictionActivation, ActivatedNormLinear, Upsampling, ConvBlock
 from world_model.temporal_layers import Bottleneck3D, TemporalBlock
 
 
@@ -201,57 +201,30 @@ class Distribution(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, in_channels, action_channels=4, out_channels=256):
+    def __init__(self, in_channels, out_channels=9):
         super().__init__()
-        backbone = resnet18(pretrained=False, zero_init_residual=True)
-        self.first_conv = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = backbone.bn1
-        self.relu = backbone.relu
-
-        self.layer1 = backbone.layer1
-        self.layer2 = backbone.layer2
-        self.layer3 = backbone.layer3
-
-        shared_out_channels = in_channels
-        self.up3_skip = UpsamplingAdd(256, action_channels, 128, scale_factor=2)
-        self.up2_skip = UpsamplingAdd(128, action_channels, 64, scale_factor=2)
-        self.up1_skip = UpsamplingAdd(64, action_channels, shared_out_channels, scale_factor=2)
-
-        self.output_head = nn.Sequential(
-            nn.Conv2d(shared_out_channels, shared_out_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(shared_out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(shared_out_channels, out_channels, kernel_size=1, padding=0),
+        self.model = nn.Sequential(
+            Upsampling(in_channels, 512),
+            ConvBlock(512, 512),
+            Upsampling(512, 256),
+            ConvBlock(256, 256),
+            Upsampling(256, 128),
+            ConvBlock(128, 128),
+            Upsampling(128, 64),
+            ConvBlock(64, 64),
+            Upsampling(64, 32),
+            ConvBlock(32, 32),
+            nn.Conv2d(32, out_channels, kernel_size=1, padding=0),
         )
 
-    def forward(self, x, action):
-        # (H, W)
-        skip_x = {'1': x}
-        x = self.first_conv(x)
-        x = self.bn1(x)
-        x = self.relu(x)
+    def forward(self, x):
+        # Spatially-broadcast vector to (C, 8, 8) tensor
+        b, s, c = x.shape
+        x = x.view(b*s, c, 1, 1)
+        x = x.expand(-1, -1, 4, 4)
 
-        # (H/2, W/2)
-        x = self.layer1(x)
-        skip_x['2'] = x
-        # (H/4, W/4)
-        x = self.layer2(x)
-        skip_x['3'] = x
-
-        # (H/8, W/8)
-        x = self.layer3(x)
-
-        # First upsample to (H/4, W/4)
-        x = self.up3_skip(x, skip_x['3'], action)
-
-        # Second upsample to (H/2, W/2)
-        x = self.up2_skip(x, skip_x['2'], action)
-
-        # Third upsample to (H, W)
-        x = self.up1_skip(x, skip_x['1'], action)
-
-        output = self.output_head(x)
-        return output
+        x = self.model(x)
+        return x.view(b, s, *x.shape[1:])
 
 
 class RewardModel(Policy):

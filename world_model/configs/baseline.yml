@@ -1,9 +1,9 @@
-LOG_DIR: '/home/mifs/ah2029/experiments/carla/throttle'
+LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer'
 TAG: 'baseline'
 
 GPUS: [0, 1]
 
-BATCHSIZE: 4
+BATCHSIZE: 32
 PRECISION: 16
 EPOCHS: 50
 

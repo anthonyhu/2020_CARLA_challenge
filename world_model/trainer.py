@@ -7,9 +7,9 @@ import pytorch_lightning as pl
 
 from world_model.config import get_cfg
 from world_model.dataset import get_dataset_sequential
-from world_model.models import Encoder, RepresentationModel, RewardModel
-from world_model.losses import RegressionLoss, SegmentationLoss, ProbabilisticLoss
-from world_model.utils import set_bn_momentum
+from world_model.models import Encoder, RepresentationModel, RewardModel, Decoder
+from world_model.losses import SegmentationLoss, KLBalancing
+from world_model.utils import set_bn_momentum, COLOR
 
 
 class WorldModelTrainer(pl.LightningModule):
@@ -48,7 +48,7 @@ class WorldModelTrainer(pl.LightningModule):
 
         self.predictor = RepresentationModel(in_channels=state_channels, out_channels=2*state_channels)
 
-        self.probabilistic_loss = ProbabilisticLoss()
+        self.probabilistic_loss = KLBalancing(alpha=self.config.LOSSES.KL_BALANCING_ALPHA)
 
         # self.policy = Policy(in_channels=whole_state_channels,
         #                      out_channels=self.config.MODEL.ACTION_DIM,
@@ -57,15 +57,10 @@ class WorldModelTrainer(pl.LightningModule):
         #                      )
 
         if self.config.MODEL.TRANSITION.ENABLED:
-            # print('Enabled: Next state prediction')
-            # self.transition_model = TransitionModel(
-            #     in_channels=whole_state_channels, action_channels=self.config.MODEL.ACTION_DIM,
-            #     out_channels=self.config.MODEL.ENCODER.OUTPUT_DIM,
-            # )
-            # # self.segmentation_loss = SegmentationLoss(
-            # #     use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
-            # # )
-            self.future_pred_loss = RegressionLoss(norm=2, channel_dim=-3)
+            self.decoder = Decoder(in_channels=state_channels, out_channels=self.config.SEMANTIC_SEG.N_CHANNELS)
+            self.segmentation_loss = SegmentationLoss(
+                use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
+            )
 
         else:
             assert self.receptive_field == self.config.SEQUENCE_LENGTH
@@ -111,44 +106,40 @@ class WorldModelTrainer(pl.LightningModule):
         true_states = self.representation_model(torch.cat([hidden_states, encoded_inputs], dim=-1))
         predicted_states = self.predictor(hidden_states.contiguous())
 
+        true_mu, true_sigma = torch.split(true_states, true_states.shape[-1] // 2, dim=-1)
+        pred_mu, pred_sigma = torch.split(predicted_states, predicted_states.shape[-1] // 2, dim=-1)
+
         output = {
-            'true_states': true_states,
-            'predicted_states': predicted_states,
+            'future_mu': true_mu,
+            'future_log_sigma': true_sigma,
+            'present_mu': pred_mu,
+            'present_log_sigma': pred_sigma,
         }
+
+        sample = self.sample_from_distribution(output, deployment)
+
+        reconstruction = self.decoder(sample)
+
+        output['reconstruction'] = reconstruction
 
         return output
 
     def compute_probabilistic_loss(self, output):
-        true_mu, true_sigma = torch.split(output['true_states'], output['true_states'].shape[-1] // 2, dim=-1)
-        pred_mu, pred_sigma = torch.split(output['predicted_states'], output['predicted_states'].shape[-1] // 2, dim=-1)
+        return self.probabilistic_loss(
+            output['present_mu'], output['present_log_sigma'], output['future_mu'], output['future_log_sigma']
+        )
 
-        input_loss = {
-            'present_mu': pred_mu,
-            'present_log_sigma': pred_sigma,
-            'future_mu': true_mu,
-            'future_log_sigma': true_sigma,
-        }
-
-        return self.probabilistic_loss(input_loss)
-
-    def add_stochastic_state(self, policy_input, distribution_output, deployment):
+    def sample_from_distribution(self, output, deployment):
         if not deployment:
-            mu = distribution_output['future_mu']
-            sigma = torch.exp(distribution_output['future_log_sigma'])
+            mu = output['future_mu']
+            sigma = torch.exp(output['future_log_sigma'])
         else:
-            mu = distribution_output['present_mu']
-            sigma = torch.exp(distribution_output['present_log_sigma'])
+            mu = output['present_mu']
+            sigma = torch.exp(output['present_log_sigma'])
 
         noise = torch.randn_like(mu)
         sample = mu + sigma * noise
-
-        b, _, _, h, w = policy_input.shape
-        latent_dim = sample.shape[1]
-        # Spatially broadcast sample to the dimensions of present_features
-        sample = sample.view(b, 1, latent_dim, 1, 1).expand(b, 1, latent_dim, h, w)
-
-        policy_input = torch.cat([policy_input, sample], dim=2)
-        return policy_input
+        return sample
 
     def shared_step(self, batch, is_train, optimizer_idx=0):
         output = self.forward(batch)
@@ -156,8 +147,13 @@ class WorldModelTrainer(pl.LightningModule):
         if self.config.MODEL.PROBABILISTIC.ENABLED:
             probabilistic_loss = self.compute_probabilistic_loss(output)
 
+        reconstruction_loss = self.segmentation_loss(
+            prediction=output['reconstruction'], target=torch.argmax(batch['bev'], dim=2)
+        )
+
         losses = {
             'probabilistic': self.config.LOSSES.WEIGHT_PROBABILISTIC * probabilistic_loss,
+            'reconstruction': self.config.LOSSES.WEIGHT_RECONSTRUCTION * reconstruction_loss,
         }
 
         if not self.config.MODEL.REWARD.ENABLED:
@@ -198,8 +194,7 @@ class WorldModelTrainer(pl.LightningModule):
         for key, value in loss.items():
             self.log('train_' + key, value)
         if self.training_step_count % self.config.VIS_INTERVAL == 0:
-            pass
-            #self.visualise(batch, output, batch_idx, prefix='train')
+            self.visualise(batch, output, batch_idx, prefix='train')
 
         return {'loss': sum(loss.values())}
 
@@ -208,16 +203,30 @@ class WorldModelTrainer(pl.LightningModule):
         for key, value in loss.items():
             self.log('val_' + key, value)
 
+        if batch_idx == 0:
+            self.visualise(batch, output, batch_idx, prefix='val')
+
         return {'val_loss': sum(loss.values()).item()}
 
     def visualise(self, labels, output, batch_idx, prefix='train'):
-        # TODO
-        pass
-        # visualisation_video = visualise_output(labels, output, self.config)
-        # name = f'{prefix}_outputs'
-        # if prefix == 'val':
-        #     name = name + f'_{batch_idx}'
-        # self.logger.experiment.add_video(name, visualisation_video, global_step=self.training_step_count, fps=2)
+        target = torch.argmax(labels['bev'], dim=2)
+        pred = torch.argmax(output['reconstruction'], dim=2)
+
+        colours = torch.tensor(COLOR, dtype=torch.long, device=pred.device)
+
+        target = colours[target]
+        pred = colours[pred]
+
+        # Move channel to third position
+        target = target.permute(0, 1, 4, 2, 3)
+        pred = pred.permute(0, 1, 4, 2, 3)
+
+        visualisation_video = torch.cat([target, pred], dim=-1).detach()
+
+        name = f'{prefix}_outputs'
+        if prefix == 'val':
+            name = name + f'_{batch_idx}'
+        self.logger.experiment.add_video(name, visualisation_video, global_step=self.training_step_count, fps=2)
 
     def configure_optimizers(self):
         params = list(self.parameters())
