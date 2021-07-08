@@ -57,7 +57,7 @@ class WorldModelTrainer(pl.LightningModule):
         #                      )
 
         if self.config.MODEL.TRANSITION.ENABLED:
-            self.decoder = Decoder(in_channels=state_channels, out_channels=self.config.SEMANTIC_SEG.N_CHANNELS)
+            self.decoder = Decoder(in_channels=2*state_channels, out_channels=self.config.SEMANTIC_SEG.N_CHANNELS)
             self.segmentation_loss = SegmentationLoss(
                 use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
             )
@@ -118,7 +118,7 @@ class WorldModelTrainer(pl.LightningModule):
 
         sample = self.sample_from_distribution(output, deployment)
 
-        reconstruction = self.decoder(sample)
+        reconstruction = self.decoder(torch.cat([sample, hidden_states], dim=-1))
 
         output['reconstruction'] = reconstruction
 
@@ -212,7 +212,7 @@ class WorldModelTrainer(pl.LightningModule):
         target = torch.argmax(labels['bev'], dim=2)
         pred = torch.argmax(output['reconstruction'], dim=2)
 
-        colours = torch.tensor(COLOR, dtype=torch.long, device=pred.device)
+        colours = torch.tensor(COLOR, dtype=torch.uint8, device=pred.device)
 
         target = colours[target]
         pred = colours[pred]

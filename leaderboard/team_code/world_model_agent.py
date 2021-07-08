@@ -58,7 +58,7 @@ def debug_display(tick_data, bev, next_state, steer, throttle, brake, desired_sp
     if SAVE_FRAMES:
         os.makedirs(os.path.join(save_path, ROUTE_NAME), exist_ok=True)
         Image.fromarray(np.array(_combined)).save(os.path.join(save_path, ROUTE_NAME, f'{step:05d}.png'))
-    cv2.imshow('map', cv2.cvtColor(np.array(_combined), cv2.COLOR_BGR2RGB))
+    cv2.imshow('map', cv2.cvtColor(np.array(_combined), cv2.COLOR_RGB2BGR))
     cv2.waitKey(1)
 
 

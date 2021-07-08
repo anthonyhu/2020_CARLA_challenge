@@ -1,5 +1,5 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer'
-TAG: 'baseline'
+TAG: 'baseline_kl_balancing=0.8'
 
 GPUS: [0, 1]
 
@@ -15,5 +15,8 @@ MODEL:
     ENABLED: True
   PROBABILISTIC:
     ENABLED: True
+
+LOSSES:
+  KL_BALANCING_ALPHA: 0.8
 
 N_WORKERS: 10
