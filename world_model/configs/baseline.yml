@@ -1,7 +1,7 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer'
-TAG: 'baseline_kl_balancing=0.8'
+TAG: 'baseline_kl_balancing=0.5_1gpu'
 
-GPUS: [0, 1]
+GPUS: [0]
 
 BATCHSIZE: 32
 PRECISION: 16
@@ -17,6 +17,6 @@ MODEL:
     ENABLED: True
 
 LOSSES:
-  KL_BALANCING_ALPHA: 0.8
+  KL_BALANCING_ALPHA: 0.5
 
 N_WORKERS: 10
