@@ -4,7 +4,7 @@ import torch.nn as nn
 from efficientnet_pytorch import EfficientNet
 from torchvision.models.resnet import resnet18
 
-from world_model.layers import RestrictionActivation, ActivatedNormLinear, Upsampling, ConvBlock
+from world_model.layers import RestrictionActivation, ActivatedNormLinear, Upsampling, ConvBlock, Bottleneck
 from world_model.temporal_layers import Bottleneck3D, TemporalBlock
 
 
@@ -205,15 +205,15 @@ class Decoder(nn.Module):
         super().__init__()
         self.model = nn.Sequential(
             Upsampling(in_channels, 512),
-            ConvBlock(512, 512),
+            Bottleneck(512, 512),
             Upsampling(512, 256),
-            ConvBlock(256, 256),
+            Bottleneck(256, 256),
             Upsampling(256, 128),
-            ConvBlock(128, 128),
+            Bottleneck(128, 128),
             Upsampling(128, 64),
-            ConvBlock(64, 64),
+            Bottleneck(64, 64),
             Upsampling(64, 32),
-            ConvBlock(32, 32),
+            Bottleneck(32, 32),
             nn.Conv2d(32, out_channels, kernel_size=1, padding=0),
         )
 
