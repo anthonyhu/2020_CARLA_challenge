@@ -42,3 +42,10 @@ def preprocess_bev_state(x):
     # Double size
     #x_out = nn.functional.interpolate(x_out[None], scale_factor=2, mode='nearest')[0]
     return x_out
+
+
+def preprocess_batch(batch, device, unsqueeze=False):
+    for key, value in batch.items():
+        batch[key] = value.to(device)
+        if unsqueeze:
+            batch[key] = batch[key].unsqueeze(0)

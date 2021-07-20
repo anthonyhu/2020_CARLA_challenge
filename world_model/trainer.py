@@ -7,7 +7,7 @@ import pytorch_lightning as pl
 
 from world_model.config import get_cfg
 from world_model.dataset import get_dataset_sequential
-from world_model.models import Encoder, RepresentationModel, RewardModel, Decoder
+from world_model.models import Encoder, RSSM, RewardModel, Decoder
 from world_model.losses import SegmentationLoss, KLBalancing
 from world_model.utils import set_bn_momentum, COLOR
 
@@ -33,20 +33,14 @@ class WorldModelTrainer(pl.LightningModule):
 
         # Recurrent model
         self.receptive_field = self.config.RECEPTIVE_FIELD
-        self.recurrent_model = nn.GRU(
-            input_size=self.config.MODEL.ENCODER.OUTPUT_DIM + self.config.MODEL.ACTION_DIM,
-            hidden_size=self.config.MODEL.RECURRENT_MODEL.OUTPUT_DIM,
-            batch_first=True,
-        )
 
-        # Representation model
-        state_channels = self.config.MODEL.RECURRENT_MODEL.OUTPUT_DIM
-        self.representation_model = RepresentationModel(
-            in_channels=state_channels + self.config.MODEL.ENCODER.OUTPUT_DIM,
-            out_channels=2*state_channels,
+        # Recurrent state sequence module
+        self.rssm = RSSM(
+            encoder_dim=self.config.MODEL.ENCODER.OUTPUT_DIM,
+            action_dim=self.config.MODEL.ACTION_DIM,
+            state_dim=self.config.MODEL.RECURRENT_MODEL.STATE_DIM,
+            hidden_state_dim=self.config.MODEL.RECURRENT_MODEL.HIDDEN_STATE_DIM,
         )
-
-        self.predictor = RepresentationModel(in_channels=state_channels, out_channels=2*state_channels)
 
         self.probabilistic_loss = KLBalancing(alpha=self.config.LOSSES.KL_BALANCING_ALPHA)
 
@@ -57,7 +51,10 @@ class WorldModelTrainer(pl.LightningModule):
         #                      )
 
         if self.config.MODEL.TRANSITION.ENABLED:
-            self.decoder = Decoder(in_channels=2*state_channels, out_channels=self.config.SEMANTIC_SEG.N_CHANNELS)
+            self.decoder = Decoder(
+                in_channels=self.config.MODEL.RECURRENT_MODEL.HIDDEN_STATE_DIM + self.config.MODEL.RECURRENT_MODEL.STATE_DIM,
+                out_channels=self.config.SEMANTIC_SEG.N_CHANNELS,
+            )
             self.segmentation_loss = SegmentationLoss(
                 use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
             )
@@ -96,29 +93,18 @@ class WorldModelTrainer(pl.LightningModule):
         encoded_inputs = self.encoder(batch['bev'].view(b*s, img_c, img_h, img_w))
         encoded_inputs = encoded_inputs.view(b, s, encoded_inputs.shape[-1])
 
-        # Concatenate action to inputs.
-        input_action = batch['action']
-        encoded_inputs_action = torch.cat([encoded_inputs, input_action], dim=-1)
-
-        # Recurrent model
-        hidden_states, _ = self.recurrent_model(encoded_inputs_action)
-
-        true_states = self.representation_model(torch.cat([hidden_states, encoded_inputs], dim=-1))
-        predicted_states = self.predictor(hidden_states.contiguous())
-
-        true_mu, true_sigma = torch.split(true_states, true_states.shape[-1] // 2, dim=-1)
-        pred_mu, pred_sigma = torch.split(predicted_states, predicted_states.shape[-1] // 2, dim=-1)
+        h, sample, z_mu, z_sigma, z_hat_mu, z_hat_sigma = self.rssm(
+            input_embedding=encoded_inputs, action=batch['action'],
+        )
 
         output = {
-            'future_mu': true_mu,
-            'future_log_sigma': true_sigma,
-            'present_mu': pred_mu,
-            'present_log_sigma': pred_sigma,
+            'future_mu': z_mu,
+            'future_log_sigma': z_sigma,
+            'present_mu': z_hat_mu,
+            'present_log_sigma': z_hat_sigma,
         }
 
-        sample = self.sample_from_distribution(output, deployment)
-
-        reconstruction = self.decoder(torch.cat([sample, hidden_states], dim=-1))
+        reconstruction = self.decoder(torch.cat([h, sample], dim=-1))
 
         output['reconstruction'] = reconstruction
 
@@ -128,18 +114,6 @@ class WorldModelTrainer(pl.LightningModule):
         return self.probabilistic_loss(
             output['present_mu'], output['present_log_sigma'], output['future_mu'], output['future_log_sigma']
         )
-
-    def sample_from_distribution(self, output, deployment):
-        if not deployment:
-            mu = output['future_mu']
-            sigma = torch.exp(output['future_log_sigma'])
-        else:
-            mu = output['present_mu']
-            sigma = torch.exp(output['present_log_sigma'])
-
-        noise = torch.randn_like(mu)
-        sample = mu + sigma * noise
-        return sample
 
     def shared_step(self, batch, is_train, optimizer_idx=0):
         output = self.forward(batch)

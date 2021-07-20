@@ -127,10 +127,7 @@ class RepresentationModel(nn.Module):
         )
 
     def forward(self, x):
-        b, s, c = x.shape
-        x = x.view(b*s, c)
-        x = self.model(x)
-        return x.view(b, s, x.shape[-1])
+        return self.model(x)
 
 
 class Policy(nn.Module):
@@ -225,6 +222,100 @@ class Decoder(nn.Module):
 
         x = self.model(x)
         return x.view(b, s, *x.shape[1:])
+
+
+class RSSM(nn.Module):
+    def __init__(self, encoder_dim, action_dim, state_dim, hidden_state_dim):
+        super().__init__()
+        self.encoder_dim = encoder_dim
+        self.action_dim = action_dim
+        self.state_dim = state_dim
+        self.hidden_state_dim = hidden_state_dim
+
+        self.recurrent_model = nn.GRUCell(
+            input_size=state_dim + action_dim,
+            hidden_size=hidden_state_dim,
+        )
+
+        self.posterior = RepresentationModel(
+            in_channels=hidden_state_dim + encoder_dim,
+            out_channels=2*state_dim,
+        )
+
+        self.prior = RepresentationModel(in_channels=hidden_state_dim, out_channels=2*state_dim)
+
+    def forward(self, input_embedding, action):
+        """
+        Inputs
+        ------
+            input_embedding: torch.Tensor size (B, S, C)
+            action: torch.Tensor size (B, S, 2)
+
+        Returns
+        -------
+            dict:
+                hidden_states: torch.Tensor (B, S, C_h)
+                samples: torch.Tensor (B, S, C_s)
+                posterior_mu: torch.Tensor (B, S, C_s)
+                posterior_sigma: torch.Tensor (B, S, C_s)
+                prior_mu: torch.Tensor (B, S, C_s)
+                prior_sigma: torch.Tensor (B, S, C_s)
+        """
+        batch_size, sequence_length = input_embedding.shape[:2]
+
+        h = []
+        sample = []
+        z_mu = []
+        z_sigma = []
+        z_hat_mu = []
+        z_hat_sigma = []
+
+        h_t = input_embedding.new_zeros((batch_size, self.hidden_state_dim))
+        sample_t = input_embedding.new_zeros((batch_size, self.state_dim))
+        for t in range(sequence_length):
+            if t == 0:
+                action_t = input_embedding.new_zeros((batch_size, self.action_dim))
+            else:
+                action_t = action[:, t-1]
+            h_t, z_t_mu, z_t_sigma, z_t_hat_mu, z_t_hat_sigma, sample_t = self.single_step(
+                h_t, sample_t, action_t, input_embedding[:, t]
+            )
+
+            h.append(h_t)
+            sample.append(sample_t)
+            z_mu.append(z_t_mu)
+            z_sigma.append(z_t_sigma)
+            z_hat_mu.append(z_t_hat_mu)
+            z_hat_sigma.append(z_t_hat_sigma)
+
+        h = torch.stack(h, dim=1)
+        sample = torch.stack(sample, dim=1)
+        z_mu = torch.stack(z_mu, dim=1)
+        z_sigma = torch.stack(z_sigma, dim=1)
+        z_hat_mu = torch.stack(z_hat_mu, dim=1)
+        z_hat_sigma = torch.stack(z_hat_sigma, dim=1)
+
+        return h, sample, z_mu, z_sigma, z_hat_mu, z_hat_sigma
+
+    def single_step(self, h_t, sample_t, action_t, embedding_t, deployment=False):
+        input_t = torch.cat([sample_t, action_t], dim=-1)
+        h_t = self.recurrent_model(input_t, h_t)
+        z_t = self.posterior(torch.cat([h_t, embedding_t], dim=-1))
+        z_t_hat = self.prior(h_t)
+
+        z_t_mu, z_t_sigma = torch.split(z_t, z_t.shape[-1] // 2, dim=-1)
+        z_t_hat_mu, z_t_hat_sigma = torch.split(z_t_hat, z_t_hat.shape[-1] // 2, dim=-1)
+
+        if deployment:
+            sample_t = self.sample_from_distribution(z_t_hat_mu, z_t_hat_sigma)
+        else:
+            sample_t = self.sample_from_distribution(z_t_mu, z_t_sigma)
+        return h_t, z_t_mu, z_t_sigma, z_t_hat_mu, z_t_hat_sigma, sample_t
+
+    def sample_from_distribution(self, mu, log_sigma):
+        noise = torch.randn_like(mu)
+        sample = mu + torch.exp(log_sigma) * noise
+        return sample
 
 
 class RewardModel(Policy):

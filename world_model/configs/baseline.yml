@@ -1,7 +1,7 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer'
-TAG: 'decoder_bottleneck'
+TAG: 'correct_implementation_3gpus'
 
-GPUS: [0]
+GPUS: [0, 1, 2]
 
 BATCHSIZE: 20
 PRECISION: 32
