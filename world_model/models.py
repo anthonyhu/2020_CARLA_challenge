@@ -244,7 +244,7 @@ class RSSM(nn.Module):
 
         self.prior = RepresentationModel(in_channels=hidden_state_dim, out_channels=2*state_dim)
 
-    def forward(self, input_embedding, action):
+    def forward(self, input_embedding, action, deployment=False):
         """
         Inputs
         ------
@@ -270,17 +270,24 @@ class RSSM(nn.Module):
         z_hat_mu = []
         z_hat_sigma = []
 
+        # Initialisation
         h_t = input_embedding.new_zeros((batch_size, self.hidden_state_dim))
-        sample_t = input_embedding.new_zeros((batch_size, self.state_dim))
-        for t in range(sequence_length):
-            if t == 0:
-                action_t = input_embedding.new_zeros((batch_size, self.action_dim))
-            else:
-                action_t = action[:, t-1]
-            h_t, z_t_mu, z_t_sigma, z_t_hat_mu, z_t_hat_sigma, sample_t = self.single_step(
-                h_t, sample_t, action_t, input_embedding[:, t]
+        h_t, z_t_mu, z_t_sigma, z_t_hat_mu, z_t_hat_sigma, sample_t = self.single_step(
+                h_t, None, None, input_embedding[:, 0], deployment=deployment, do_recurrent_step=False
             )
 
+        h.append(h_t)
+        sample.append(sample_t)
+        z_mu.append(z_t_mu)
+        z_sigma.append(z_t_sigma)
+        z_hat_mu.append(z_t_hat_mu)
+        z_hat_sigma.append(z_t_hat_sigma)
+
+        for t in range(1, sequence_length):
+            action_t = action[:, t-1]
+            h_t, z_t_mu, z_t_sigma, z_t_hat_mu, z_t_hat_sigma, sample_t = self.single_step(
+                h_t, sample_t, action_t, input_embedding[:, t], deployment=deployment, do_recurrent_step=True
+            )
             h.append(h_t)
             sample.append(sample_t)
             z_mu.append(z_t_mu)
@@ -297,9 +304,11 @@ class RSSM(nn.Module):
 
         return h, sample, z_mu, z_sigma, z_hat_mu, z_hat_sigma
 
-    def single_step(self, h_t, sample_t, action_t, embedding_t, deployment=False):
-        input_t = torch.cat([sample_t, action_t], dim=-1)
-        h_t = self.recurrent_model(input_t, h_t)
+    def single_step(self, h_t, sample_t, action_t, embedding_t, deployment=False, do_recurrent_step=True):
+        if do_recurrent_step:
+            input_t = torch.cat([sample_t, action_t], dim=-1)
+            h_t = self.recurrent_model(input_t, h_t)
+
         z_t = self.posterior(torch.cat([h_t, embedding_t], dim=-1))
         z_t_hat = self.prior(h_t)
 

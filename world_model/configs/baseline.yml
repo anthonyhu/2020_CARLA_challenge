@@ -1,5 +1,5 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer'
-TAG: 'correct_implementation_3gpus'
+TAG: 'fix_3gpus'
 
 GPUS: [0, 1, 2]
 
