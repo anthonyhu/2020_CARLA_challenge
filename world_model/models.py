@@ -122,7 +122,10 @@ class RepresentationModel(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.model = nn.Sequential(
-            ActivatedNormLinear(in_channels, out_channels),
+            ActivatedNormLinear(in_channels, 256),
+            ActivatedNormLinear(256, 128),
+            ActivatedNormLinear(128, 128),
+            ActivatedNormLinear(128, out_channels),
             nn.Linear(out_channels, out_channels),
         )
 

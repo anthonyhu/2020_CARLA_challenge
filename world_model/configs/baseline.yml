@@ -1,7 +1,7 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer'
-TAG: 'fix_3gpus'
+TAG: 'larger_representation_64states_2gpus'
 
-GPUS: [0, 1, 2]
+GPUS: [0, 1]
 
 BATCHSIZE: 20
 PRECISION: 32
@@ -15,5 +15,7 @@ MODEL:
     ENABLED: True
   PROBABILISTIC:
     ENABLED: True
-
+  RECURRENT_MODEL:
+    STATE_DIM: 64
+    HIDDEN_STATE_DIM: 256
 N_WORKERS: 10
