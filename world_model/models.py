@@ -312,8 +312,8 @@ class RSSM(nn.Module):
             input_t = torch.cat([sample_t, action_t], dim=-1)
             h_t = self.recurrent_model(input_t, h_t)
 
-        z_t = self.posterior(torch.cat([h_t, embedding_t], dim=-1))
         z_t_hat = self.prior(h_t)
+        z_t = self.posterior(torch.cat([h_t, embedding_t], dim=-1))
 
         z_t_mu, z_t_sigma = torch.split(z_t, z_t.shape[-1] // 2, dim=-1)
         z_t_hat_mu, z_t_hat_sigma = torch.split(z_t_hat, z_t_hat.shape[-1] // 2, dim=-1)
