@@ -1,5 +1,5 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer'
-TAG: 'larger_representation_128states_4gpus'
+TAG: 'larger_representation_128states_4gpus_observe'
 
 GPUS: [0, 1, 2, 3]
 

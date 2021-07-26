@@ -235,6 +235,8 @@ class RSSM(nn.Module):
         self.state_dim = state_dim
         self.hidden_state_dim = hidden_state_dim
 
+        self.pre_gru_net = RepresentationModel(in_channels=state_dim + action_dim, out_channels=state_dim + action_dim)
+
         self.recurrent_model = nn.GRUCell(
             input_size=state_dim + action_dim,
             hidden_size=hidden_state_dim,
@@ -275,28 +277,22 @@ class RSSM(nn.Module):
 
         # Initialisation
         h_t = input_embedding.new_zeros((batch_size, self.hidden_state_dim))
-        h_t, z_t_mu, z_t_sigma, z_t_hat_mu, z_t_hat_sigma, sample_t = self.single_step(
-                h_t, None, None, input_embedding[:, 0], deployment=deployment, do_recurrent_step=False
+        sample_t = input_embedding.new_zeros((batch_size, self.state_dim))
+        for t in range(sequence_length):
+            if t == 0:
+                action_t = torch.zeros_like(action[:, 0])
+            else:
+                action_t = action[:, t-1]
+            output = self.observe_step(
+                h_t, sample_t, action_t, input_embedding[:, t]
             )
 
-        h.append(h_t)
-        sample.append(sample_t)
-        z_mu.append(z_t_mu)
-        z_sigma.append(z_t_sigma)
-        z_hat_mu.append(z_t_hat_mu)
-        z_hat_sigma.append(z_t_hat_sigma)
-
-        for t in range(1, sequence_length):
-            action_t = action[:, t-1]
-            h_t, z_t_mu, z_t_sigma, z_t_hat_mu, z_t_hat_sigma, sample_t = self.single_step(
-                h_t, sample_t, action_t, input_embedding[:, t], deployment=deployment, do_recurrent_step=True
-            )
-            h.append(h_t)
-            sample.append(sample_t)
-            z_mu.append(z_t_mu)
-            z_sigma.append(z_t_sigma)
-            z_hat_mu.append(z_t_hat_mu)
-            z_hat_sigma.append(z_t_hat_sigma)
+            h.append(output['prior']['h_t'])
+            sample.append(output['posterior']['sample_t'])
+            z_mu.append(output['posterior']['mu'])
+            z_sigma.append(output['posterior']['log_sigma'])
+            z_hat_mu.append(output['prior']['mu'])
+            z_hat_sigma.append(output['prior']['log_sigma'])
 
         h = torch.stack(h, dim=1)
         sample = torch.stack(sample, dim=1)
@@ -307,22 +303,43 @@ class RSSM(nn.Module):
 
         return h, sample, z_mu, z_sigma, z_hat_mu, z_hat_sigma
 
-    def single_step(self, h_t, sample_t, action_t, embedding_t, deployment=False, do_recurrent_step=True):
-        if do_recurrent_step:
-            input_t = torch.cat([sample_t, action_t], dim=-1)
-            h_t = self.recurrent_model(input_t, h_t)
+    def imagine_step(self, h_t, sample_t, action_t):
+        input_t = torch.cat([sample_t, action_t], dim=-1)
+        input_t = self.pre_gru_net(input_t)
+        h_t = self.recurrent_model(input_t, h_t)
 
         z_t_hat = self.prior(h_t)
-        z_t = self.posterior(torch.cat([h_t, embedding_t], dim=-1))
+        z_t_hat_mu, z_t_hat_sigma = torch.split(z_t_hat, z_t_hat.shape[-1] // 2, dim=-1)
+        sample_t = self.sample_from_distribution(z_t_hat_mu, z_t_hat_sigma)
+        imagine_output = {
+            'h_t': h_t,
+            'sample_t': sample_t,
+            'mu': z_t_hat_mu,
+            'log_sigma': z_t_hat_sigma,
+        }
+        return imagine_output
+
+    def observe_step(self, h_t, sample_t, action_t, embedding_t):
+        imagine_output = self.imagine_step(h_t, sample_t, action_t)
+
+        z_t = self.posterior(torch.cat([imagine_output['h_t'], embedding_t], dim=-1))
 
         z_t_mu, z_t_sigma = torch.split(z_t, z_t.shape[-1] // 2, dim=-1)
-        z_t_hat_mu, z_t_hat_sigma = torch.split(z_t_hat, z_t_hat.shape[-1] // 2, dim=-1)
 
-        if deployment:
-            sample_t = self.sample_from_distribution(z_t_hat_mu, z_t_hat_sigma)
-        else:
-            sample_t = self.sample_from_distribution(z_t_mu, z_t_sigma)
-        return h_t, z_t_mu, z_t_sigma, z_t_hat_mu, z_t_hat_sigma, sample_t
+        sample_t = self.sample_from_distribution(z_t_mu, z_t_sigma)
+
+        posterior_output = {
+            'sample_t': sample_t,
+            'mu': z_t_mu,
+            'log_sigma': z_t_sigma,
+        }
+
+        output = {
+            'prior': imagine_output,
+            'posterior': posterior_output,
+        }
+
+        return output
 
     def sample_from_distribution(self, mu, log_sigma):
         noise = torch.randn_like(mu)
