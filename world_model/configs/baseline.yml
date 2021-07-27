@@ -1,7 +1,7 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer_conv'
-TAG: 'downsample=8_3gpus'
+TAG: 'downsample=16_3gpus'
 
-GPUS: [0, 1, 2, 3]
+GPUS: [0, 1, 2]
 
 BATCHSIZE: 20
 PRECISION: 32
@@ -12,8 +12,8 @@ RECEPTIVE_FIELD: 1
 
 MODEL:
   ENCODER:
-    OUTPUT_DIM: 128
-    DOWNSAMPLE_FACTOR: 8
+    OUTPUT_DIM: 256
+    DOWNSAMPLE_FACTOR: 16
   TRANSITION:
     ENABLED: True
   PROBABILISTIC:

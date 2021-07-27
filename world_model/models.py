@@ -251,7 +251,9 @@ class Decoder(nn.Module):
     def __init__(self, in_channels, out_channels=9):
         super().__init__()
         self.model = nn.Sequential(
-            Upsampling(in_channels, 128),
+            Upsampling(in_channels, 256),
+            Bottleneck(256, 256),
+            Upsampling(256, 128),
             Bottleneck(128, 128),
             Upsampling(128, 64),
             Bottleneck(64, 64),
