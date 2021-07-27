@@ -4,7 +4,8 @@ import torch.nn as nn
 from efficientnet_pytorch import EfficientNet
 from torchvision.models.resnet import resnet18
 
-from world_model.layers import RestrictionActivation, ActivatedNormLinear, Upsampling, ConvBlock, Bottleneck
+from world_model.layers import RestrictionActivation, ActivatedNormLinear, Upsampling, ConvBlock, Bottleneck, \
+    UpsamplingConcat
 from world_model.temporal_layers import Bottleneck3D, TemporalBlock
 
 
@@ -68,23 +69,52 @@ class TemporalModelIdentity(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, in_channels=64, out_channels=256, name='efficientnet-b0'):
+    def __init__(self, in_channels=64, out_channels=256, downsample_factor=8, name='efficientnet-b0'):
         super().__init__()
+        self.out_channels = out_channels
+        self.downsample_factor = downsample_factor
+        self.version = name.split('-')[1]
+
+        if self.downsample_factor == 16:
+            if self.version == 'b0':
+                upsampling_in_channels = 320 + 112
+            elif self.version == 'b4':
+                upsampling_in_channels = 448 + 160
+            upsampling_out_channels = 512
+        elif self.downsample_factor == 8:
+            if self.version == 'b0':
+                upsampling_in_channels = 112 + 40
+            elif self.version == 'b4':
+                upsampling_in_channels = 160 + 56
+            upsampling_out_channels = 128
+        else:
+            raise ValueError(f'Downsample factor {self.downsample_factor} not handled.')
 
         self.backbone = EfficientNet.from_pretrained(name)
         self.backbone._conv_stem = nn.Conv2d(
             in_channels, 32, kernel_size=3, stride=2, bias=False, padding=1
         )
-
-        self.output_net = nn.Sequential(nn.AdaptiveAvgPool2d(1),
-                                        nn.Conv2d(320, out_channels, kernel_size=1, bias=False),
-                                        nn.BatchNorm2d(out_channels, momentum=0.01),
-                                        self.backbone._swish,
-                                        )
-
         self.delete_unused_layers()
 
+        self.upsampling_layer = UpsamplingConcat(upsampling_in_channels, upsampling_out_channels)
+        self.last_layer = nn.Sequential(
+            nn.Conv2d(upsampling_out_channels, out_channels, kernel_size=1, padding=0),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+
     def delete_unused_layers(self):
+        indices_to_delete = []
+        for idx in range(len(self.backbone._blocks)):
+            if self.downsample_factor == 8:
+                if self.version == 'b0' and idx > 10:
+                    indices_to_delete.append(idx)
+                if self.version == 'b4' and idx > 21:
+                    indices_to_delete.append(idx)
+
+        for idx in reversed(indices_to_delete):
+            del self.backbone._blocks[idx]
+
         del self.backbone._conv_head
         del self.backbone._bn1
         del self.backbone._avg_pooling
@@ -109,13 +139,27 @@ class Encoder(nn.Module):
                 endpoints['reduction_{}'.format(len(endpoints) + 1)] = prev_x
             prev_x = x
 
+            if self.downsample == 8:
+                if self.version == 'b0' and idx == 10:
+                    break
+                if self.version == 'b4' and idx == 21:
+                    break
+
+        # Head
+        endpoints['reduction_{}'.format(len(endpoints) + 1)] = x
+
+        if self.downsample_factor == 16:
+            input_1, input_2 = endpoints['reduction_5'], endpoints['reduction_4']
+        elif self.downsample_factor == 8:
+            input_1, input_2 = endpoints['reduction_4'], endpoints['reduction_3']
+
+        x = self.upsampling_layer(input_1, input_2)
         return x
 
     def forward(self, x):
-        x = self.get_features(x)
-        x = self.output_net(x)
-        x = x.mean(dim=(-1, -2))
-        return x
+        x = self.get_features(x)  # get feature vector
+
+        return self.last_layer(x)
 
 
 class RepresentationModel(nn.Module):

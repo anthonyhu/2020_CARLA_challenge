@@ -199,6 +199,7 @@ class Upsampling(nn.Module):
             nn.Upsample(scale_factor=scale_factor, mode='bilinear', align_corners=False),
             nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
         )
 
     def forward(self, x):
@@ -213,6 +214,7 @@ class UpsamplingAdd(nn.Module):
             nn.Upsample(scale_factor=scale_factor, mode='bilinear', align_corners=False),
             nn.Conv2d(in_channels + action_channels, out_channels, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
         )
 
     def forward(self, x, x_skip, action):
@@ -222,6 +224,26 @@ class UpsamplingAdd(nn.Module):
         x = torch.cat([x, action], dim=1)
         x = self.upsample_layer(x)
         return x + x_skip
+
+
+class UpsamplingConcat(nn.Module):
+    def __init__(self, in_channels, out_channels, scale_factor=2):
+        super().__init__()
+        self.upsample = nn.Upsample(scale_factor=scale_factor, mode='bilinear', align_corners=False)
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x_to_upsample, x):
+        x_to_upsample = self.upsample(x_to_upsample)
+        x_to_upsample = torch.cat([x, x_to_upsample], dim=1)
+        return self.conv(x_to_upsample)
 
 
 class ActivatedNormLinear(nn.Module):
