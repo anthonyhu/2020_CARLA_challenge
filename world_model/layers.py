@@ -255,3 +255,8 @@ class ActivatedNormLinear(nn.Module):
 
     def forward(self, x):
         return self.module(x)
+
+
+class Flatten(nn.Module):
+    def forward(self, x):
+        return x.mean(dim=(-1, -2))

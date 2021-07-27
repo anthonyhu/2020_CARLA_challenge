@@ -29,6 +29,7 @@ class WorldModelTrainer(pl.LightningModule):
         # Encoder
         self.encoder = Encoder(
             in_channels=self.config.MODEL.IN_CHANNELS, out_channels=self.config.MODEL.ENCODER.OUTPUT_DIM,
+            downsample_factor=self.config.MODEL.ENCODER.DOWNSAMPLE_FACTOR,
         )
 
         # Recurrent model
@@ -91,7 +92,7 @@ class WorldModelTrainer(pl.LightningModule):
         # Encoder
         b, s, img_c, img_h, img_w = batch['bev'].shape
         encoded_inputs = self.encoder(batch['bev'].view(b*s, img_c, img_h, img_w))
-        encoded_inputs = encoded_inputs.view(b, s, encoded_inputs.shape[-1])
+        encoded_inputs = encoded_inputs.view(b, s, *encoded_inputs.shape[1:])
 
         h, sample, z_mu, z_sigma, z_hat_mu, z_hat_sigma = self.rssm(
             input_embedding=encoded_inputs, action=batch['action'],
@@ -104,7 +105,10 @@ class WorldModelTrainer(pl.LightningModule):
             'present_log_sigma': z_hat_sigma,
         }
 
-        reconstruction = self.decoder(torch.cat([h, sample], dim=-1))
+        h_height, h_width = h.shape[-2:]
+        sample = sample.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, h_height, h_width)
+
+        reconstruction = self.decoder(torch.cat([h, sample], dim=-3))
 
         output['reconstruction'] = reconstruction
 

@@ -1,5 +1,5 @@
-LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer'
-TAG: 'larger_representation_128states_4gpus_observe'
+LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer_conv'
+TAG: 'downsample=8_3gpus'
 
 GPUS: [0, 1, 2, 3]
 
@@ -11,11 +11,14 @@ SEQUENCE_LENGTH: 5
 RECEPTIVE_FIELD: 1
 
 MODEL:
+  ENCODER:
+    OUTPUT_DIM: 128
+    DOWNSAMPLE_FACTOR: 8
   TRANSITION:
     ENABLED: True
   PROBABILISTIC:
     ENABLED: True
   RECURRENT_MODEL:
-    STATE_DIM: 128
-    HIDDEN_STATE_DIM: 256
+    STATE_DIM: 32
+    HIDDEN_STATE_DIM: 128
 N_WORKERS: 10

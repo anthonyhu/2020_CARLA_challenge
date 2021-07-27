@@ -221,3 +221,27 @@ class TemporalBlock(nn.Module):
             x = self.projection(x)
         x = x + x_residual
         return x
+
+
+class ConvGRUCell(nn.Module):
+    def __init__(self, input_size, hidden_size, kernel_size=3, bias=True):
+        super().__init__()
+        def create_conv():
+            return nn.Conv2d(
+                in_channels=input_size + hidden_size,
+                out_channels=hidden_size,
+                kernel_size=kernel_size,
+                padding=(kernel_size - 1) // 2,
+                bias=bias,
+            )
+        self.conv_reset = create_conv()
+        self.conv_update = create_conv()
+        self.conv_new_hidden = create_conv()
+
+    def forward(self, x, hidden):
+        reset_and_update_input = torch.cat([x, hidden], dim=1)
+        reset = torch.sigmoid(self.conv_reset(reset_and_update_input))
+        update = torch.sigmoid(self.conv_update(reset_and_update_input))
+        new_hidden_input = torch.cat([x, reset * hidden], dim=1)
+        new_hidden = torch.tanh(self.conv_new_hidden(new_hidden_input))
+        return (1 - update) * new_hidden + update * hidden

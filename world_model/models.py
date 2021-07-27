@@ -5,8 +5,8 @@ from efficientnet_pytorch import EfficientNet
 from torchvision.models.resnet import resnet18
 
 from world_model.layers import RestrictionActivation, ActivatedNormLinear, Upsampling, ConvBlock, Bottleneck, \
-    UpsamplingConcat
-from world_model.temporal_layers import Bottleneck3D, TemporalBlock
+    UpsamplingConcat, Flatten
+from world_model.temporal_layers import Bottleneck3D, TemporalBlock, ConvGRUCell
 
 
 class TemporalModel(nn.Module):
@@ -98,7 +98,7 @@ class Encoder(nn.Module):
 
         self.upsampling_layer = UpsamplingConcat(upsampling_in_channels, upsampling_out_channels)
         self.last_layer = nn.Sequential(
-            nn.Conv2d(upsampling_out_channels, out_channels, kernel_size=1, padding=0),
+            nn.Conv2d(upsampling_out_channels, out_channels, kernel_size=1, padding=0, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
         )
@@ -139,7 +139,7 @@ class Encoder(nn.Module):
                 endpoints['reduction_{}'.format(len(endpoints) + 1)] = prev_x
             prev_x = x
 
-            if self.downsample == 8:
+            if self.downsample_factor == 8:
                 if self.version == 'b0' and idx == 10:
                     break
                 if self.version == 'b4' and idx == 21:
@@ -166,10 +166,13 @@ class RepresentationModel(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.model = nn.Sequential(
-            ActivatedNormLinear(in_channels, 256),
-            ActivatedNormLinear(256, 128),
-            ActivatedNormLinear(128, 128),
-            ActivatedNormLinear(128, out_channels),
+            Bottleneck(in_channels, 128),
+            Bottleneck(128, 128),
+            Bottleneck(128, 256, downsample=True),
+            Bottleneck(256, 256, downsample=True),
+            nn.AdaptiveAvgPool2d(1),
+            Flatten(),
+            ActivatedNormLinear(256, out_channels),
             nn.Linear(out_channels, out_channels),
         )
 
@@ -248,11 +251,7 @@ class Decoder(nn.Module):
     def __init__(self, in_channels, out_channels=9):
         super().__init__()
         self.model = nn.Sequential(
-            Upsampling(in_channels, 512),
-            Bottleneck(512, 512),
-            Upsampling(512, 256),
-            Bottleneck(256, 256),
-            Upsampling(256, 128),
+            Upsampling(in_channels, 128),
             Bottleneck(128, 128),
             Upsampling(128, 64),
             Bottleneck(64, 64),
@@ -262,10 +261,8 @@ class Decoder(nn.Module):
         )
 
     def forward(self, x):
-        # Spatially-broadcast vector to (C, 8, 8) tensor
-        b, s, c = x.shape
-        x = x.view(b*s, c, 1, 1)
-        x = x.expand(-1, -1, 4, 4)
+        b, s = x.shape[:2]
+        x = x.view(b*s, *x.shape[2:])
 
         x = self.model(x)
         return x.view(b, s, *x.shape[1:])
@@ -279,9 +276,7 @@ class RSSM(nn.Module):
         self.state_dim = state_dim
         self.hidden_state_dim = hidden_state_dim
 
-        self.pre_gru_net = RepresentationModel(in_channels=state_dim + action_dim, out_channels=state_dim + action_dim)
-
-        self.recurrent_model = nn.GRUCell(
+        self.recurrent_model = ConvGRUCell(
             input_size=state_dim + action_dim,
             hidden_size=hidden_state_dim,
         )
@@ -293,7 +288,7 @@ class RSSM(nn.Module):
 
         self.prior = RepresentationModel(in_channels=hidden_state_dim, out_channels=2*state_dim)
 
-    def forward(self, input_embedding, action, deployment=False):
+    def forward(self, input_embedding, action):
         """
         Inputs
         ------
@@ -320,7 +315,8 @@ class RSSM(nn.Module):
         z_hat_sigma = []
 
         # Initialisation
-        h_t = input_embedding.new_zeros((batch_size, self.hidden_state_dim))
+        height, width = input_embedding.shape[-2:]
+        h_t = input_embedding.new_zeros((batch_size, self.hidden_state_dim, height, width))
         sample_t = input_embedding.new_zeros((batch_size, self.state_dim))
         for t in range(sequence_length):
             if t == 0:
@@ -348,8 +344,10 @@ class RSSM(nn.Module):
         return h, sample, z_mu, z_sigma, z_hat_mu, z_hat_sigma
 
     def imagine_step(self, h_t, sample_t, action_t):
+        h, w = h_t.shape[-2:]
         input_t = torch.cat([sample_t, action_t], dim=-1)
-        input_t = self.pre_gru_net(input_t)
+        # Spatially broadcast
+        input_t = input_t.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, h, w)
         h_t = self.recurrent_model(input_t, h_t)
 
         z_t_hat = self.prior(h_t)
@@ -366,7 +364,7 @@ class RSSM(nn.Module):
     def observe_step(self, h_t, sample_t, action_t, embedding_t):
         imagine_output = self.imagine_step(h_t, sample_t, action_t)
 
-        z_t = self.posterior(torch.cat([imagine_output['h_t'], embedding_t], dim=-1))
+        z_t = self.posterior(torch.cat([imagine_output['h_t'], embedding_t], dim=-3))
 
         z_t_mu, z_t_sigma = torch.split(z_t, z_t.shape[-1] // 2, dim=-1)
 
