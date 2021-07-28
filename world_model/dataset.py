@@ -96,7 +96,7 @@ class SequentialCarlaDataset(Dataset):
         return data
 
 
-def get_dataset_sequential(dataset_dir, is_train=True, batch_size=64, num_workers=4, **kwargs):
+def get_dataset_sequential(dataset_dir, is_train=True, batch_size=64, num_workers=4, debug_overfit=False, **kwargs):
     data = list()
 
     data_path = Path(dataset_dir) / 'train' if is_train else Path(dataset_dir) / 'val'
@@ -106,6 +106,9 @@ def get_dataset_sequential(dataset_dir, is_train=True, batch_size=64, num_worker
     for i, _dataset_dir in enumerate(episodes):
         data.append(SequentialCarlaDataset(_dataset_dir, **kwargs))
     data = torch.utils.data.ConcatDataset(data)
+    if debug_overfit:
+        print('DEBUG OVERFITTING!')
+        data = torch.utils.data.Subset(data, torch.arange(batch_size))
     print(f'{len(data)} elements in {data_path}')
 
     shuffle = True if is_train else False

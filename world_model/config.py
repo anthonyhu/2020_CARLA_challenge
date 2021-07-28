@@ -110,6 +110,9 @@ _C.OPTIMIZER.WEIGHT_DECAY = 1e-7
 _C.GRAD_NORM_CLIP = 5
 
 
+# Sanity checks
+_C.DEBUG_OVERFIT = False
+
 # Backward compatibility
 # _C.IMAGE.FINAL_DIM = (1, 1)
 # _C.MODEL.POLICY.NAME = 'efficientnet-b0'

@@ -60,7 +60,8 @@ class ProbabilisticLoss(nn.Module):
                     2 * var_present)
         )
 
-        kl_loss = torch.mean(torch.sum(kl_div, dim=-1))
+        # Sum across channel and spatial dimension
+        kl_loss = torch.mean(torch.sum(kl_div, dim=(-1, -2, -3)))
 
         return kl_loss
 

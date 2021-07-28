@@ -166,14 +166,11 @@ class RepresentationModel(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.model = nn.Sequential(
-            Bottleneck(in_channels, 128),
-            Bottleneck(128, 128),
-            Bottleneck(128, 256, downsample=True),
-            Bottleneck(256, 256, downsample=True),
-            nn.AdaptiveAvgPool2d(1),
-            Flatten(),
-            ActivatedNormLinear(256, out_channels),
-            nn.Linear(out_channels, out_channels),
+            Bottleneck(in_channels, in_channels),
+            Bottleneck(in_channels, in_channels),
+            Bottleneck(in_channels, in_channels),
+            Bottleneck(in_channels, out_channels),
+            nn.Conv2d(out_channels, out_channels, kernel_size=1),
         )
 
     def forward(self, x):
@@ -253,13 +250,16 @@ class Decoder(nn.Module):
         self.model = nn.Sequential(
             Upsampling(in_channels, 256),
             Bottleneck(256, 256),
+            Upsampling(256, 256),
+            Bottleneck(256, 256),
             Upsampling(256, 128),
             Bottleneck(128, 128),
-            Upsampling(128, 64),
+            Upsampling(128, 128),
+            Bottleneck(128, 128),
+            Bottleneck(128, 128),
+            Bottleneck(128, 64),
             Bottleneck(64, 64),
-            Upsampling(64, 32),
-            Bottleneck(32, 32),
-            nn.Conv2d(32, out_channels, kernel_size=1, padding=0),
+            nn.Conv2d(64, out_channels, kernel_size=1, padding=0),
         )
 
     def forward(self, x):
@@ -294,21 +294,19 @@ class RSSM(nn.Module):
         """
         Inputs
         ------
-            input_embedding: torch.Tensor size (B, S, C)
+            input_embedding: torch.Tensor size (B, S, C, H, W)
             action: torch.Tensor size (B, S, 2)
 
         Returns
         -------
             dict:
-                hidden_states: torch.Tensor (B, S, C_h)
-                samples: torch.Tensor (B, S, C_s)
-                posterior_mu: torch.Tensor (B, S, C_s)
-                posterior_sigma: torch.Tensor (B, S, C_s)
-                prior_mu: torch.Tensor (B, S, C_s)
-                prior_sigma: torch.Tensor (B, S, C_s)
+                hidden_states: torch.Tensor (B, S, C_h, H, W)
+                samples: torch.Tensor (B, S, C_s, H, W)
+                posterior_mu: torch.Tensor (B, S, C_s, H, W)
+                posterior_sigma: torch.Tensor (B, S, C_s, H, W)
+                prior_mu: torch.Tensor (B, S, C_s, H, W)
+                prior_sigma: torch.Tensor (B, S, C_s, H, W)
         """
-        batch_size, sequence_length = input_embedding.shape[:2]
-
         h = []
         sample = []
         z_mu = []
@@ -317,9 +315,9 @@ class RSSM(nn.Module):
         z_hat_sigma = []
 
         # Initialisation
-        height, width = input_embedding.shape[-2:]
+        batch_size, sequence_length, _, height, width = input_embedding.shape
         h_t = input_embedding.new_zeros((batch_size, self.hidden_state_dim, height, width))
-        sample_t = input_embedding.new_zeros((batch_size, self.state_dim))
+        sample_t = input_embedding.new_zeros((batch_size, self.state_dim, height, width))
         for t in range(sequence_length):
             if t == 0:
                 action_t = torch.zeros_like(action[:, 0])
@@ -347,13 +345,14 @@ class RSSM(nn.Module):
 
     def imagine_step(self, h_t, sample_t, action_t):
         h, w = h_t.shape[-2:]
-        input_t = torch.cat([sample_t, action_t], dim=-1)
-        # Spatially broadcast
-        input_t = input_t.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, h, w)
+        #  Spatially broadcast
+        action_t = action_t.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, h, w)
+        input_t = torch.cat([sample_t, action_t], dim=-3)
+
         h_t = self.recurrent_model(input_t, h_t)
 
         z_t_hat = self.prior(h_t)
-        z_t_hat_mu, z_t_hat_sigma = torch.split(z_t_hat, z_t_hat.shape[-1] // 2, dim=-1)
+        z_t_hat_mu, z_t_hat_sigma = torch.split(z_t_hat, z_t_hat.shape[-3] // 2, dim=-3)
         sample_t = self.sample_from_distribution(z_t_hat_mu, z_t_hat_sigma)
         imagine_output = {
             'h_t': h_t,
@@ -368,7 +367,7 @@ class RSSM(nn.Module):
 
         z_t = self.posterior(torch.cat([imagine_output['h_t'], embedding_t], dim=-3))
 
-        z_t_mu, z_t_sigma = torch.split(z_t, z_t.shape[-1] // 2, dim=-1)
+        z_t_mu, z_t_sigma = torch.split(z_t, z_t.shape[-3] // 2, dim=-3)
 
         sample_t = self.sample_from_distribution(z_t_mu, z_t_sigma)
 

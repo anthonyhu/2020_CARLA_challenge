@@ -1,0 +1,15 @@
+_BASE_: 'baseline.yml'
+
+LOG_DIR: '/home/mifs/ah2029/experiments/carla/debug'
+TAG: 'overfit'
+
+GPUS: [0]
+BATCHSIZE: 2
+EPOCHS: 1000
+LOGGING_INTERVAL: 10
+
+DATASET:
+  VERSION: 'mini'
+
+VIS_INTERVAL: 8
+DEBUG_OVERFIT: True

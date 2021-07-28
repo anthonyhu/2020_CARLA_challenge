@@ -9,6 +9,7 @@ from world_model.config import get_cfg
 from world_model.dataset import get_dataset_sequential
 from world_model.models import Encoder, RSSM, RewardModel, Decoder
 from world_model.losses import SegmentationLoss, KLBalancing
+from world_model.metrics import IntersectionOverUnion
 from world_model.utils import set_bn_momentum, COLOR
 
 
@@ -63,6 +64,8 @@ class WorldModelTrainer(pl.LightningModule):
         else:
             assert self.receptive_field == self.config.SEQUENCE_LENGTH
 
+        self.metric_iou_val = IntersectionOverUnion(n_classes=self.config.SEMANTIC_SEG.N_CHANNELS)
+
         #self.policy_loss = RegressionLoss(norm=1, channel_dim=-1)
 
         if self.config.MODEL.REWARD.ENABLED:
@@ -105,9 +108,6 @@ class WorldModelTrainer(pl.LightningModule):
             'present_log_sigma': z_hat_sigma,
         }
 
-        h_height, h_width = h.shape[-2:]
-        sample = sample.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, h_height, h_width)
-
         reconstruction = self.decoder(torch.cat([h, sample], dim=-3))
 
         output['reconstruction'] = reconstruction
@@ -133,6 +133,11 @@ class WorldModelTrainer(pl.LightningModule):
             'probabilistic': self.config.LOSSES.WEIGHT_PROBABILISTIC * probabilistic_loss,
             'reconstruction': self.config.LOSSES.WEIGHT_RECONSTRUCTION * reconstruction_loss,
         }
+
+        if not is_train:
+            seg_prediction = output['reconstruction'].detach()
+            seg_prediction = torch.argmax(seg_prediction, dim=2)
+            self.metric_iou_val(seg_prediction, torch.argmax(batch['bev'], dim=2))
 
         if not self.config.MODEL.REWARD.ENABLED:
             return losses, output
@@ -186,6 +191,23 @@ class WorldModelTrainer(pl.LightningModule):
 
         return {'val_loss': sum(loss.values()).item()}
 
+    def shared_epoch_end(self, step_outputs, is_train):
+        # log per class iou metrics
+        class_names = ['unlabeled', 'pedestrian', 'road_line', 'road', 'sidewalk', 'vehicles', 'red_light',
+                       'yellow_light', 'green_light']
+        if not is_train:
+            scores = self.metric_iou_val.compute()
+            for key, value in zip(class_names, scores):
+                self.logger.experiment.add_scalar('val_iou_' + key, value, global_step=self.training_step_count)
+            self.logger.experiment.add_scalar('val_mean_iou', torch.mean(scores), global_step=self.training_step_count)
+            self.metric_iou_val.reset()
+
+    def training_epoch_end(self, step_outputs):
+        self.shared_epoch_end(step_outputs, True)
+
+    def validation_epoch_end(self, step_outputs):
+        self.shared_epoch_end(step_outputs, False)
+
     def visualise(self, labels, output, batch_idx, prefix='train'):
         target = torch.argmax(labels['bev'], dim=2)
         pred = torch.argmax(output['reconstruction'], dim=2)
@@ -226,11 +248,13 @@ class WorldModelTrainer(pl.LightningModule):
     def train_dataloader(self):
         return get_dataset_sequential(
             pathlib.Path(self.dataset_path), is_train=True, batch_size=self.config.BATCHSIZE,
-            num_workers=self.config.N_WORKERS, sequence_length=self.config.SEQUENCE_LENGTH,
+            num_workers=self.config.N_WORKERS,
+            debug_overfit=self.config.DEBUG_OVERFIT, sequence_length=self.config.SEQUENCE_LENGTH,
         )
 
     def val_dataloader(self):
         return get_dataset_sequential(
             pathlib.Path(self.dataset_path), is_train=False, batch_size=self.config.BATCHSIZE,
-            num_workers=self.config.N_WORKERS, sequence_length=self.config.SEQUENCE_LENGTH,
+            num_workers=self.config.N_WORKERS,
+            debug_overfit=self.config.DEBUG_OVERFIT, sequence_length=self.config.SEQUENCE_LENGTH,
         )
