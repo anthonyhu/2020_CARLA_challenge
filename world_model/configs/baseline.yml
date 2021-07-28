@@ -1,9 +1,9 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer_conv'
-TAG: 'downsample=16_3gpus'
+TAG: 'downsample=16_2gpus_fully_conv'
 
-GPUS: [0, 1, 2]
+GPUS: [0, 1]
 
-BATCHSIZE: 20
+BATCHSIZE: 8
 PRECISION: 32
 EPOCHS: 50
 
