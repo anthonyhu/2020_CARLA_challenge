@@ -122,12 +122,14 @@ class WorldModelTrainer(pl.LightningModule):
     def shared_step(self, batch, is_train, optimizer_idx=0):
         output = self.forward(batch)
 
-        if self.config.MODEL.PROBABILISTIC.ENABLED:
-            probabilistic_loss = self.compute_probabilistic_loss(output)
-
         reconstruction_loss = self.segmentation_loss(
             prediction=output['reconstruction'], target=torch.argmax(batch['bev'], dim=2)
         )
+
+        if self.config.MODEL.PROBABILISTIC.ENABLED:
+            probabilistic_loss = self.compute_probabilistic_loss(output)
+        else:
+            probabilistic_loss = reconstruction_loss.new_zeros(1)
 
         losses = {
             'probabilistic': self.config.LOSSES.WEIGHT_PROBABILISTIC * probabilistic_loss,

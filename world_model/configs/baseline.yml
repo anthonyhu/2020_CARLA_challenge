@@ -1,5 +1,5 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer_conv'
-TAG: 'downsample=16_2gpus_fully_conv'
+TAG: 'downsample=16_2gpus_fully_conv_no_probabilistic'
 
 GPUS: [0, 1]
 
@@ -17,7 +17,7 @@ MODEL:
   TRANSITION:
     ENABLED: True
   PROBABILISTIC:
-    ENABLED: True
+    ENABLED: False
   RECURRENT_MODEL:
     STATE_DIM: 128
     HIDDEN_STATE_DIM: 128
