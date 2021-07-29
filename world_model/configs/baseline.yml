@@ -1,5 +1,5 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer_conv'
-TAG: 'correct_rssm'
+TAG: 'correct_rssm_and_weight=0.02'
 
 GPUS: [0, 1]
 
@@ -12,13 +12,17 @@ RECEPTIVE_FIELD: 1
 
 MODEL:
   ENCODER:
-    OUTPUT_DIM: 256
+    OUTPUT_DIM: 128
     DOWNSAMPLE_FACTOR: 16
   TRANSITION:
     ENABLED: True
   PROBABILISTIC:
     ENABLED: True
   RECURRENT_MODEL:
-    STATE_DIM: 128
-    HIDDEN_STATE_DIM: 128
+    STATE_DIM: 64
+    HIDDEN_STATE_DIM: 196
 N_WORKERS: 10
+
+LOSSES:
+  WEIGHT_RECONSTRUCTION: 1.0
+  WEIGHT_PROBABILISTIC: 0.02
