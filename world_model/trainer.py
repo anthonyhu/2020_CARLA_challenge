@@ -129,7 +129,7 @@ class WorldModelTrainer(pl.LightningModule):
         if self.config.MODEL.PROBABILISTIC.ENABLED:
             probabilistic_loss = self.compute_probabilistic_loss(output)
         else:
-            probabilistic_loss = reconstruction_loss.new_zeros(1)
+            probabilistic_loss = reconstruction_loss.new_zeros(1)[0]
 
         losses = {
             'probabilistic': self.config.LOSSES.WEIGHT_PROBABILISTIC * probabilistic_loss,

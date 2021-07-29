@@ -326,9 +326,11 @@ class RSSM(nn.Module):
             output = self.observe_step(
                 h_t, sample_t, action_t, input_embedding[:, t]
             )
+            sample_t = output['posterior']['sample_t']
+            h_t = output['prior']['h_t']
 
-            h.append(output['prior']['h_t'])
-            sample.append(output['posterior']['sample_t'])
+            h.append(h_t)
+            sample.append(sample_t)
             z_mu.append(output['posterior']['mu'])
             z_sigma.append(output['posterior']['log_sigma'])
             z_hat_mu.append(output['prior']['mu'])
