@@ -82,7 +82,7 @@ class WorldModelTrainer(pl.LightningModule):
 
         self.training_step_count = 0
 
-    def forward(self, batch, deployment=False):
+    def forward(self, batch, is_train=True):
         """
         Parameters
         ----------
@@ -98,7 +98,7 @@ class WorldModelTrainer(pl.LightningModule):
         encoded_inputs = encoded_inputs.view(b, s, *encoded_inputs.shape[1:])
 
         h, sample, z_mu, z_sigma, z_hat_mu, z_hat_sigma = self.rssm(
-            input_embedding=encoded_inputs, action=batch['action'],
+            input_embedding=encoded_inputs, action=batch['action'], is_train=is_train
         )
 
         output = {
@@ -120,7 +120,7 @@ class WorldModelTrainer(pl.LightningModule):
         )
 
     def shared_step(self, batch, is_train, optimizer_idx=0):
-        output = self.forward(batch)
+        output = self.forward(batch, is_train=is_train)
 
         reconstruction_loss = self.segmentation_loss(
             prediction=output['reconstruction'], target=torch.argmax(batch['bev'], dim=2)

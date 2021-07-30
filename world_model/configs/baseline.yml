@@ -1,5 +1,5 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer_conv'
-TAG: 'correct_rssm_and_weight=0.02'
+TAG: 'weight=0.0001'
 
 GPUS: [0, 1]
 
@@ -25,4 +25,4 @@ N_WORKERS: 10
 
 LOSSES:
   WEIGHT_RECONSTRUCTION: 1.0
-  WEIGHT_PROBABILISTIC: 0.02
+  WEIGHT_PROBABILISTIC: 0.0001

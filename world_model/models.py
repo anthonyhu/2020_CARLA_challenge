@@ -290,7 +290,7 @@ class RSSM(nn.Module):
 
         self.prior = RepresentationModel(in_channels=hidden_state_dim, out_channels=2*state_dim)
 
-    def forward(self, input_embedding, action):
+    def forward(self, input_embedding, action, is_train=True):
         """
         Inputs
         ------
@@ -326,7 +326,10 @@ class RSSM(nn.Module):
             output = self.observe_step(
                 h_t, sample_t, action_t, input_embedding[:, t]
             )
-            sample_t = output['posterior']['sample_t']
+            if is_train:
+                sample_t = output['posterior']['sample_t']
+            else:
+                sample_t = output['prior']['sample_t']
             h_t = output['prior']['h_t']
 
             h.append(h_t)
