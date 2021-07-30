@@ -271,12 +271,13 @@ class Decoder(nn.Module):
 
 
 class RSSM(nn.Module):
-    def __init__(self, encoder_dim, action_dim, state_dim, hidden_state_dim):
+    def __init__(self, encoder_dim, action_dim, state_dim, hidden_state_dim, receptive_field):
         super().__init__()
         self.encoder_dim = encoder_dim
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.hidden_state_dim = hidden_state_dim
+        self.receptive_field = receptive_field
 
         self.recurrent_model = ConvGRUCell(
             input_size=state_dim + action_dim,
@@ -326,7 +327,7 @@ class RSSM(nn.Module):
             output = self.observe_step(
                 h_t, sample_t, action_t, input_embedding[:, t]
             )
-            if is_train:
+            if is_train or t < self.receptive_field:
                 sample_t = output['posterior']['sample_t']
             else:
                 sample_t = output['prior']['sample_t']

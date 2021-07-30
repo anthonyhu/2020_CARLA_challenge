@@ -42,6 +42,7 @@ class WorldModelTrainer(pl.LightningModule):
             action_dim=self.config.MODEL.ACTION_DIM,
             state_dim=self.config.MODEL.RECURRENT_MODEL.STATE_DIM,
             hidden_state_dim=self.config.MODEL.RECURRENT_MODEL.HIDDEN_STATE_DIM,
+            receptive_field=self.receptive_field,
         )
 
         self.probabilistic_loss = KLBalancing(alpha=self.config.LOSSES.KL_BALANCING_ALPHA)
