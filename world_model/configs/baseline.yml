@@ -1,7 +1,7 @@
-LOG_DIR: '/home/mifs/ah2029/experiments/carla/dreamer_conv'
-TAG: 'weight=0.0001'
+LOG_DIR: '/home/mifs/ah2029/experiments/carla/random_agent'
+TAG: 'random_agent_1gpu'
 
-GPUS: [0, 1]
+GPUS: [0] #[0, 1]
 
 BATCHSIZE: 8
 PRECISION: 32
@@ -9,6 +9,9 @@ EPOCHS: 50
 
 SEQUENCE_LENGTH: 5
 RECEPTIVE_FIELD: 3
+
+DATASET:
+  VERSION: 'random_agent'
 
 MODEL:
   ENCODER:
@@ -25,4 +28,4 @@ N_WORKERS: 10
 
 LOSSES:
   WEIGHT_RECONSTRUCTION: 1.0
-  WEIGHT_PROBABILISTIC: 0.0001
+  WEIGHT_PROBABILISTIC: 0.0005
