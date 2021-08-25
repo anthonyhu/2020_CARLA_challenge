@@ -17,7 +17,7 @@ from team_code.pid_controller import PIDController
 
 DEBUG = int(os.environ.get('HAS_DISPLAY', 0))
 SAVE_FRAMES = True
-GAME_FPS = 20
+GAME_FPS = 20.0
 MODEL_FPS = 2
 ROUTE_NAME = 'route_05'
 

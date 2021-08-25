@@ -143,10 +143,11 @@ class AutoPilot(MapAgent):
             steer *= 0.5
             throttle = 0.0
 
-        _draw.text((5, 90), 'Speed: %.3f' % speed)
-        _draw.text((5, 110), 'Target: %.3f' % target_speed)
-        _draw.text((5, 130), 'Angle: %.3f' % angle_unnorm)
-        _draw.text((5, 150), 'Angle Far: %.3f' % angle_far_unnorm)
+        if HAS_DISPLAY:
+            _draw.text((5, 90), 'Speed: %.3f' % speed)
+            _draw.text((5, 110), 'Target: %.3f' % target_speed)
+            _draw.text((5, 130), 'Angle: %.3f' % angle_unnorm)
+            _draw.text((5, 150), 'Angle Far: %.3f' % angle_far_unnorm)
 
         return steer, throttle, brake, target_speed
 
@@ -169,22 +170,26 @@ class AutoPilot(MapAgent):
 
         ####
         # For visualisation
-        _topdown = Image.fromarray(COLOR[CONVERTER[topdown]])
-        _rgb = Image.fromarray(rgb)
-        _draw = ImageDraw.Draw(_topdown)
+        if HAS_DISPLAY:
+            _topdown = Image.fromarray(COLOR[CONVERTER[topdown]])
+            _rgb = Image.fromarray(rgb)
+            _draw = ImageDraw.Draw(_topdown)
 
-        _topdown.thumbnail((256, 256))
-        _rgb = _rgb.resize((int(256 / _rgb.size[1] * _rgb.size[0]), 256))
+            _topdown.thumbnail((256, 256))
+            _rgb = _rgb.resize((int(256 / _rgb.size[1] * _rgb.size[0]), 256))
 
-        _combined = Image.fromarray(np.hstack((_rgb, _topdown)))
-        _draw = ImageDraw.Draw(_combined)
+            _combined = Image.fromarray(np.hstack((_rgb, _topdown)))
+            _draw = ImageDraw.Draw(_combined)
+        else:
+            _draw = None
 
         steer, throttle, brake, target_speed = self._get_control(near_node, far_node, data, _draw)
 
-        _draw.text((5, 10), 'FPS: %.3f' % (self.step / (time.time() - self.wall_start)))
-        _draw.text((5, 30), 'Steer: %.3f' % steer)
-        _draw.text((5, 50), 'Throttle: %.3f' % throttle)
-        _draw.text((5, 70), 'Brake: %s' % brake)
+        if HAS_DISPLAY:
+            _draw.text((5, 10), 'FPS: %.3f' % (self.step / (time.time() - self.wall_start)))
+            _draw.text((5, 30), 'Steer: %.3f' % steer)
+            _draw.text((5, 50), 'Throttle: %.3f' % throttle)
+            _draw.text((5, 70), 'Brake: %s' % brake)
 
         if HAS_DISPLAY:
             cv2.imshow('map', cv2.cvtColor(np.array(_combined), cv2.COLOR_BGR2RGB))
@@ -196,13 +201,12 @@ class AutoPilot(MapAgent):
         control.throttle = throttle
         control.brake = float(brake)
 
-        if self.step % 10 == 0:
-            self.save(far_node, near_command, steer, throttle, brake, target_speed, data)
+        self.save(far_node, near_command, steer, throttle, brake, target_speed, data)
 
         return control
 
     def save(self, far_node, near_command, steer, throttle, brake, target_speed, tick_data):
-        frame = self.step // 10
+        frame = self.step
 
         pos = self._get_position(tick_data)
         theta = tick_data['compass']
