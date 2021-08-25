@@ -260,3 +260,37 @@ class ActivatedNormLinear(nn.Module):
 class Flatten(nn.Module):
     def forward(self, x):
         return x.mean(dim=(-1, -2))
+
+
+class VoxelsSumming(torch.autograd.Function):
+    """Adapted from https://github.com/nv-tlabs/lift-splat-shoot/blob/master/src/tools.py#L193"""
+    @staticmethod
+    def forward(ctx, x, geometry, ranks):
+        """The features `x` and `geometry` are ranked by voxel positions."""
+        # Cumulative sum of all features.
+        x = x.cumsum(0)
+
+        # Indicates the change of voxel.
+        mask = torch.ones(x.shape[0], device=x.device, dtype=torch.bool)
+        mask[:-1] = ranks[1:] != ranks[:-1]
+
+        x, geometry = x[mask], geometry[mask]
+        # Calculate sum of features within a voxel.
+        x = torch.cat((x[:1], x[1:] - x[:-1]))
+
+        ctx.save_for_backward(mask)
+        ctx.mark_non_differentiable(geometry)
+
+        return x, geometry
+
+    @staticmethod
+    def backward(ctx, grad_x, grad_geometry):
+        (mask,) = ctx.saved_tensors
+        # Since the operation is summing, we simply need to send gradient
+        # to all elements that were part of the summation process.
+        indices = torch.cumsum(mask, 0)
+        indices[mask] -= 1
+
+        output_grad = grad_x[indices]
+
+        return output_grad, None, None

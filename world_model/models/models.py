@@ -2,11 +2,10 @@ import torch
 import torch.nn as nn
 
 from efficientnet_pytorch import EfficientNet
-from torchvision.models.resnet import resnet18
 
-from world_model.layers import RestrictionActivation, ActivatedNormLinear, Upsampling, ConvBlock, Bottleneck, \
-    UpsamplingConcat, Flatten
-from world_model.temporal_layers import Bottleneck3D, TemporalBlock, ConvGRUCell
+from world_model.layers.layers import ActivatedNormLinear, Upsampling, Bottleneck, \
+    UpsamplingConcat
+from world_model.layers.temporal_layers import Bottleneck3D, TemporalBlock, ConvGRUCell
 
 
 class TemporalModel(nn.Module):
@@ -69,44 +68,39 @@ class TemporalModelIdentity(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, in_channels=64, out_channels=256, downsample_factor=8, name='efficientnet-b0'):
+    def __init__(self, config, D):
         super().__init__()
-        self.out_channels = out_channels
-        self.downsample_factor = downsample_factor
-        self.version = name.split('-')[1]
+        self.D = D
+        self.C = config.OUTPUT_DIM
+        self.downsample = config.DOWNSAMPLE_FACTOR
 
-        if self.downsample_factor == 16:
+        self.version = config.NAME.split('-')[1]
+
+        self.backbone = EfficientNet.from_pretrained(config.NAME)
+        self.delete_unused_layers()
+
+        if self.downsample == 16:
             if self.version == 'b0':
                 upsampling_in_channels = 320 + 112
             elif self.version == 'b4':
                 upsampling_in_channels = 448 + 160
             upsampling_out_channels = 512
-        elif self.downsample_factor == 8:
+        elif self.downsample == 8:
             if self.version == 'b0':
                 upsampling_in_channels = 112 + 40
             elif self.version == 'b4':
                 upsampling_in_channels = 160 + 56
             upsampling_out_channels = 128
         else:
-            raise ValueError(f'Downsample factor {self.downsample_factor} not handled.')
-
-        self.backbone = EfficientNet.from_pretrained(name)
-        self.backbone._conv_stem = nn.Conv2d(
-            in_channels, 32, kernel_size=3, stride=2, bias=False, padding=1
-        )
-        self.delete_unused_layers()
+            raise ValueError(f'Downsample factor {self.downsample} not handled.')
 
         self.upsampling_layer = UpsamplingConcat(upsampling_in_channels, upsampling_out_channels)
-        self.last_layer = nn.Sequential(
-            nn.Conv2d(upsampling_out_channels, out_channels, kernel_size=1, padding=0, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-        )
+        self.depth_layer = nn.Conv2d(upsampling_out_channels, self.C + self.D, kernel_size=1, padding=0)
 
     def delete_unused_layers(self):
         indices_to_delete = []
         for idx in range(len(self.backbone._blocks)):
-            if self.downsample_factor == 8:
+            if self.downsample == 8:
                 if self.version == 'b0' and idx > 10:
                     indices_to_delete.append(idx)
                 if self.version == 'b4' and idx > 21:
@@ -139,7 +133,7 @@ class Encoder(nn.Module):
                 endpoints['reduction_{}'.format(len(endpoints) + 1)] = prev_x
             prev_x = x
 
-            if self.downsample_factor == 8:
+            if self.downsample == 8:
                 if self.version == 'b0' and idx == 10:
                     break
                 if self.version == 'b4' and idx == 21:
@@ -148,9 +142,9 @@ class Encoder(nn.Module):
         # Head
         endpoints['reduction_{}'.format(len(endpoints) + 1)] = x
 
-        if self.downsample_factor == 16:
+        if self.downsample == 16:
             input_1, input_2 = endpoints['reduction_5'], endpoints['reduction_4']
-        elif self.downsample_factor == 8:
+        elif self.downsample == 8:
             input_1, input_2 = endpoints['reduction_4'], endpoints['reduction_3']
 
         x = self.upsampling_layer(input_1, input_2)
@@ -159,7 +153,12 @@ class Encoder(nn.Module):
     def forward(self, x):
         x = self.get_features(x)  # get feature vector
 
-        return self.last_layer(x)
+        x = self.depth_layer(x)  # feature and depth head
+
+        depth = x[:, : self.D].softmax(dim=1)
+        x = depth.unsqueeze(1) * x[:, self.D : (self.D + self.C)].unsqueeze(2)  # outer product depth and features
+
+        return x
 
 
 class RepresentationModel(nn.Module):
@@ -249,18 +248,27 @@ class Decoder(nn.Module):
         super().__init__()
         self.model = nn.Sequential(
             Upsampling(in_channels, 256),
-            Bottleneck(256, 256),
-            Upsampling(256, 256),
-            Bottleneck(256, 256),
-            Upsampling(256, 128),
-            Bottleneck(128, 128),
-            Upsampling(128, 128),
-            Bottleneck(128, 128),
+            Bottleneck(256, 128),
             Bottleneck(128, 128),
             Bottleneck(128, 64),
             Bottleneck(64, 64),
             nn.Conv2d(64, out_channels, kernel_size=1, padding=0),
         )
+
+        # self.model = nn.Sequential(
+        #     Upsampling(in_channels, 256),
+        #     Bottleneck(256, 256),
+        #     Upsampling(256, 256),
+        #     Bottleneck(256, 256),
+        #     Upsampling(256, 128),
+        #     Bottleneck(128, 128),
+        #     Upsampling(128, 128),
+        #     Bottleneck(128, 128),
+        #     Bottleneck(128, 128),
+        #     Bottleneck(128, 64),
+        #     Bottleneck(64, 64),
+        #     nn.Conv2d(64, out_channels, kernel_size=1, padding=0),
+        # )
 
     def forward(self, x):
         b, s = x.shape[:2]

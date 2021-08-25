@@ -2,12 +2,11 @@ import os
 import pathlib
 
 import torch
-import torch.nn as nn
 import pytorch_lightning as pl
 
 from world_model.config import get_cfg
 from world_model.dataset import get_dataset_sequential
-from world_model.models import Encoder, RSSM, RewardModel, Decoder
+from world_model.models.fiery import Fiery
 from world_model.losses import SegmentationLoss, KLBalancing
 from world_model.metrics import IntersectionOverUnion
 from world_model.utils import set_bn_momentum, COLOR
@@ -23,47 +22,19 @@ class WorldModelTrainer(pl.LightningModule):
         # Dataset
         self.dataset_path = os.path.join(self.config.DATASET.DATAROOT, self.config.DATASET.VERSION)
 
-        #####
         # Model
-        #####
+        self.model = Fiery(self.config)
 
-        # Encoder
-        self.encoder = Encoder(
-            in_channels=self.config.MODEL.IN_CHANNELS, out_channels=self.config.MODEL.ENCODER.OUTPUT_DIM,
-            downsample_factor=self.config.MODEL.ENCODER.DOWNSAMPLE_FACTOR,
-        )
-
-        # Recurrent model
-        self.receptive_field = self.config.RECEPTIVE_FIELD
-
-        # Recurrent state sequence module
-        self.rssm = RSSM(
-            encoder_dim=self.config.MODEL.ENCODER.OUTPUT_DIM,
-            action_dim=self.config.MODEL.ACTION_DIM,
-            state_dim=self.config.MODEL.RECURRENT_MODEL.STATE_DIM,
-            hidden_state_dim=self.config.MODEL.RECURRENT_MODEL.HIDDEN_STATE_DIM,
-            receptive_field=self.receptive_field,
-        )
-
+        # Losses
         self.probabilistic_loss = KLBalancing(alpha=self.config.LOSSES.KL_BALANCING_ALPHA)
 
-        # self.policy = Policy(in_channels=whole_state_channels,
-        #                      out_channels=self.config.MODEL.ACTION_DIM,
-        #                      command_channels=self.config.MODEL.COMMAND_DIM,
-        #                      speed_as_input=self.config.MODEL.POLICY.SPEED_INPUT,
-        #                      )
-
         if self.config.MODEL.TRANSITION.ENABLED:
-            self.decoder = Decoder(
-                in_channels=self.config.MODEL.RECURRENT_MODEL.HIDDEN_STATE_DIM + self.config.MODEL.RECURRENT_MODEL.STATE_DIM,
-                out_channels=self.config.SEMANTIC_SEG.N_CHANNELS,
-            )
             self.segmentation_loss = SegmentationLoss(
                 use_top_k=self.config.SEMANTIC_SEG.USE_TOP_K, top_k_ratio=self.config.SEMANTIC_SEG.TOP_K_RATIO,
             )
 
         else:
-            assert self.receptive_field == self.config.SEQUENCE_LENGTH
+            assert self.model.receptive_field == self.config.SEQUENCE_LENGTH
 
         self.metric_iou_val = IntersectionOverUnion(n_classes=self.config.SEMANTIC_SEG.N_CHANNELS)
 
@@ -71,11 +42,6 @@ class WorldModelTrainer(pl.LightningModule):
 
         if self.config.MODEL.REWARD.ENABLED:
             print('Enabled: Reward')
-            self.reward_model = RewardModel(
-                in_channels=self.config.MODEL.IN_CHANNELS,
-                trajectory_length=self.config.SEQUENCE_LENGTH,
-                n_actions=self.config.MODEL.ACTION_DIM,
-            )
 
             self.adversarial_loss = torch.nn.MSELoss()
 
@@ -83,45 +49,13 @@ class WorldModelTrainer(pl.LightningModule):
 
         self.training_step_count = 0
 
-    def forward(self, batch, is_train=True):
-        """
-        Parameters
-        ----------
-            batch: dict of torch.Tensor
-                keys:
-                    'bev' (b, s, c, h, w)
-                    'route_command' (b, s, c_route)
-                    'speed' (b, s, 1)
-        """
-        # Encoder
-        b, s, img_c, img_h, img_w = batch['bev'].shape
-        encoded_inputs = self.encoder(batch['bev'].view(b*s, img_c, img_h, img_w))
-        encoded_inputs = encoded_inputs.view(b, s, *encoded_inputs.shape[1:])
-
-        h, sample, z_mu, z_sigma, z_hat_mu, z_hat_sigma = self.rssm(
-            input_embedding=encoded_inputs, action=batch['action'], is_train=is_train
-        )
-
-        output = {
-            'future_mu': z_mu,
-            'future_log_sigma': z_sigma,
-            'present_mu': z_hat_mu,
-            'present_log_sigma': z_hat_sigma,
-        }
-
-        reconstruction = self.decoder(torch.cat([h, sample], dim=-3))
-
-        output['reconstruction'] = reconstruction
-
-        return output
-
     def compute_probabilistic_loss(self, output):
         return self.probabilistic_loss(
             output['present_mu'], output['present_log_sigma'], output['future_mu'], output['future_log_sigma']
         )
 
     def shared_step(self, batch, is_train, optimizer_idx=0):
-        output = self.forward(batch, is_train=is_train)
+        output = self.model.forward(batch, is_train=is_train)
 
         reconstruction_loss = self.segmentation_loss(
             prediction=output['reconstruction'], target=torch.argmax(batch['bev'], dim=2)

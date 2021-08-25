@@ -19,6 +19,12 @@ class SequentialCarlaDataset(Dataset):
         self.sequence_length = sequence_length
         self.skip_beginning = skip_beginning
 
+        self.normalise_image = transforms.Compose(
+            [transforms.ToTensor(),
+             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+             ]
+        )
+
         dataset_dir = Path(dataset_dir)
         measurements = list(sorted((dataset_dir / 'measurements').glob('*.json')))
 
@@ -68,15 +74,18 @@ class SequentialCarlaDataset(Dataset):
             frame = self.frames[i]
 
             rgb = Image.open(path / 'rgb' / ('%s.png' % frame))
-            rgb = transforms.functional.to_tensor(rgb)
+            rgb = self.normalise_image(rgb)
 
-            rgb_left = Image.open(path / 'rgb_left' / ('%s.png' % frame))
-            rgb_left = transforms.functional.to_tensor(rgb_left)
+            # TODO remove this cropping!!
+            rgb = rgb[:, 16:]
 
-            rgb_right = Image.open(path / 'rgb_right' / ('%s.png' % frame))
-            rgb_right = transforms.functional.to_tensor(rgb_right)
+            # rgb_left = Image.open(path / 'rgb_left' / ('%s.png' % frame))
+            # rgb_left = transforms.functional.to_tensor(rgb_left)
+            #
+            # rgb_right = Image.open(path / 'rgb_right' / ('%s.png' % frame))
+            # rgb_right = transforms.functional.to_tensor(rgb_right)
 
-            image = torch.stack([rgb_left, rgb, rgb_right])
+            image = torch.stack([rgb])#([rgb_left, rgb, rgb_right])
 
             topdown = Image.open(path / 'topdown' / ('%s.png' % frame))
             topdown = preprocess_bev_state(topdown)

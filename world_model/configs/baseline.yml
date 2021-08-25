@@ -1,17 +1,14 @@
-LOG_DIR: '/home/mifs/ah2029/experiments/carla/random_agent'
-TAG: 'random_agent_1gpu'
+LOG_DIR: '/home/mifs/ah2029/experiments/carla/image_inputs'
+TAG: 'image_inputs_2gpus'
 
-GPUS: [0] #[0, 1]
+GPUS: [0, 1]
 
-BATCHSIZE: 8
+BATCHSIZE: 4
 PRECISION: 32
 EPOCHS: 50
 
 SEQUENCE_LENGTH: 5
 RECEPTIVE_FIELD: 3
-
-DATASET:
-  VERSION: 'random_agent'
 
 MODEL:
   ENCODER:
