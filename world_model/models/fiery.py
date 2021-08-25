@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from world_model.layers.layers import VoxelsSumming
 from world_model.utils import calculate_birds_eye_view_parameters, pack_sequence_dim, unpack_sequence_dim
-from world_model.models.models import Encoder, RSSM, RewardModel, Decoder
+from world_model.models.models import Encoder, DownsampleFeatures, RSSM, RewardModel, Decoder
 
 
 class Fiery(nn.Module):
@@ -31,6 +31,7 @@ class Fiery(nn.Module):
 
         # Encoder
         self.encoder = Encoder(config=self.config.MODEL.ENCODER, D=self.depth_channels)
+        self.downsample_module = DownsampleFeatures(self.config.MODEL.ENCODER.OUTPUT_DIM)
 
         # Recurrent model
         self.receptive_field = self.config.RECEPTIVE_FIELD
@@ -184,6 +185,7 @@ class Fiery(nn.Module):
         geometry = self.get_geometry(intrinsics, extrinsics)
         x = self.encoder_forward(x)
         x = self.projection_to_birds_eye_view(x, geometry)
+        x = self.downsample_module(x)
         x = unpack_sequence_dim(x, b, s)
         return x
 

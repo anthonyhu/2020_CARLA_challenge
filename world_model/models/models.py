@@ -248,27 +248,18 @@ class Decoder(nn.Module):
         super().__init__()
         self.model = nn.Sequential(
             Upsampling(in_channels, 256),
-            Bottleneck(256, 128),
+            Bottleneck(256, 256),
+            Upsampling(256, 256),
+            Bottleneck(256, 256),
+            Upsampling(256, 128),
+            Bottleneck(128, 128),
+            Upsampling(128, 128),
+            Bottleneck(128, 128),
             Bottleneck(128, 128),
             Bottleneck(128, 64),
             Bottleneck(64, 64),
             nn.Conv2d(64, out_channels, kernel_size=1, padding=0),
         )
-
-        # self.model = nn.Sequential(
-        #     Upsampling(in_channels, 256),
-        #     Bottleneck(256, 256),
-        #     Upsampling(256, 256),
-        #     Bottleneck(256, 256),
-        #     Upsampling(256, 128),
-        #     Bottleneck(128, 128),
-        #     Upsampling(128, 128),
-        #     Bottleneck(128, 128),
-        #     Bottleneck(128, 128),
-        #     Bottleneck(128, 64),
-        #     Bottleneck(64, 64),
-        #     nn.Conv2d(64, out_channels, kernel_size=1, padding=0),
-        # )
 
     def forward(self, x):
         b, s = x.shape[:2]
@@ -276,6 +267,19 @@ class Decoder(nn.Module):
 
         x = self.model(x)
         return x.view(b, s, *x.shape[1:])
+
+
+class DownsampleFeatures(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.model = nn.Sequential(
+            Bottleneck(in_channels, downsample=True),
+            Bottleneck(in_channels, downsample=True),
+            Bottleneck(in_channels, downsample=True),
+        )
+
+    def forward(self, x):
+        return self.model(x)
 
 
 class RSSM(nn.Module):

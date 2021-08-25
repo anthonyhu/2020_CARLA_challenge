@@ -77,7 +77,7 @@ class SequentialCarlaDataset(Dataset):
             rgb = self.normalise_image(rgb)
 
             # TODO remove this cropping!!
-            rgb = rgb[:, 16:]
+            rgb = rgb[:, :-16]
 
             # rgb_left = Image.open(path / 'rgb_left' / ('%s.png' % frame))
             # rgb_left = transforms.functional.to_tensor(rgb_left)
