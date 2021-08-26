@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torchvision
 
 from carla_project.src.common import CONVERTER
 from carla_project.src.common import COLOR
@@ -79,3 +80,16 @@ def calculate_birds_eye_view_parameters(x_bounds, y_bounds, z_bounds):
                                  dtype=torch.long)
 
     return bev_resolution, bev_start_position, bev_dimension
+
+
+class NormalizeInverse(torchvision.transforms.Normalize):
+    #  https://discuss.pytorch.org/t/simple-way-to-inverse-transform-normalization/4821/8
+    def __init__(self, mean, std):
+        mean = torch.as_tensor(mean)
+        std = torch.as_tensor(std)
+        std_inv = 1 / (std + 1e-7)
+        mean_inv = -mean * std_inv
+        super().__init__(mean=mean_inv, std=std_inv)
+
+    def __call__(self, tensor):
+        return super().__call__(tensor.clone())

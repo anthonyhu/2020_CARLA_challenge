@@ -153,7 +153,7 @@ class WorldModelAgent(MapAgent):
         steer = np.clip(steer, -1.0, 1.0)
 
         speed = tick_data['speed']
-        brake = predicted_throttle < 0.1
+        brake = predicted_throttle < 0.0
 
         throttle = np.clip(predicted_throttle, 0.0, 1.0)
         throttle = throttle if not brake else 0.0

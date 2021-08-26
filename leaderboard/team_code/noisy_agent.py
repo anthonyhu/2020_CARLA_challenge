@@ -2,7 +2,7 @@ import numpy as np
 
 from team_code.auto_pilot import AutoPilot
 
-NOISE_LEVEL = 0.1
+NOISE_LEVEL = 0.3  #0.02  #0.1
 
 
 def get_entry_point():
@@ -17,6 +17,8 @@ class NoisyAgent(AutoPilot):
         steer = np.clip(steer, -1.0, 1.0)
 
         throttle += NOISE_LEVEL * np.random.randn()
-        throttle = np.clip(throttle, -1.0, 1.0)
+        throttle = np.clip(throttle, 0.0, 1.0)
+
+        # TODO: No noise on break for now
 
         return steer, throttle, brake, target_speed
