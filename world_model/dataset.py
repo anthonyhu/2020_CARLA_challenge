@@ -42,8 +42,8 @@ class SequentialCarlaDataset(Dataset):
         for image_path in sorted((dataset_dir / 'rgb').glob('*.png')):
             frame = str(image_path.stem)
 
-            assert (dataset_dir / 'rgb_left' / ('%s.png' % frame)).exists()
-            assert (dataset_dir / 'rgb_right' / ('%s.png' % frame)).exists()
+            #assert (dataset_dir / 'rgb_left' / ('%s.png' % frame)).exists()
+            #assert (dataset_dir / 'rgb_right' / ('%s.png' % frame)).exists()
             assert (dataset_dir / 'topdown' / ('%s.png' % frame)).exists()
 
             self.frames.append(frame)
@@ -76,9 +76,6 @@ class SequentialCarlaDataset(Dataset):
             rgb = Image.open(path / 'rgb' / ('%s.png' % frame))
             rgb = self.normalise_image(rgb)
 
-            # TODO remove this cropping!!
-            rgb = rgb[:, :-16]
-
             # rgb_left = Image.open(path / 'rgb_left' / ('%s.png' % frame))
             # rgb_left = transforms.functional.to_tensor(rgb_left)
             #
@@ -91,7 +88,7 @@ class SequentialCarlaDataset(Dataset):
             topdown = preprocess_bev_state(topdown)
 
             # Acceleration. throttle is between [0, 1]
-            # slowing down when acceleration < 0. corresponds to breaking
+            # slowing down when acceleration < 0. corresponds to braking
             steering = self.labels['steer'][i]
             acceleration = self.labels['throttle'][i]
             if self.labels['brake'][i]:

@@ -161,7 +161,7 @@ class AutoPilot(MapAgent):
 
         data = self.tick(input_data)
         topdown = data['topdown']
-        rgb = np.hstack((data['rgb_left'], data['rgb'], data['rgb_right']))
+        rgb = data['rgb'] #np.hstack((data['rgb_left'], data['rgb'], data['rgb_right']))
 
         gps = self._get_position(data)
 
@@ -229,8 +229,8 @@ class AutoPilot(MapAgent):
         (self.save_path / 'measurements' / ('%04d.json' % frame)).write_text(str(data))
 
         Image.fromarray(tick_data['rgb']).save(self.save_path / 'rgb' / ('%04d.png' % frame))
-        Image.fromarray(tick_data['rgb_left']).save(self.save_path / 'rgb_left' / ('%04d.png' % frame))
-        Image.fromarray(tick_data['rgb_right']).save(self.save_path / 'rgb_right' / ('%04d.png' % frame))
+        #Image.fromarray(tick_data['rgb_left']).save(self.save_path / 'rgb_left' / ('%04d.png' % frame))
+        #Image.fromarray(tick_data['rgb_right']).save(self.save_path / 'rgb_right' / ('%04d.png' % frame))
         Image.fromarray(tick_data['topdown']).save(self.save_path / 'topdown' / ('%04d.png' % frame))
 
     def _should_brake(self):

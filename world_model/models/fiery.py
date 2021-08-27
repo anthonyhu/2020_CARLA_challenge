@@ -71,7 +71,8 @@ class Fiery(nn.Module):
         and https://github.com/bradyz/carla_utils_fork/blob/dynamic-scene/carla_utils/recording/sensors/camera.py
         """
         x, y, z = 1.3, 0.0, 1.3
-        pitch, yaw, fov = 0.0, 0.0, 90
+        pitch, yaw = 0.0, 0.0
+        fov = self.config.IMAGE.FOV
         h, w = self.config.IMAGE.DIM
 
         f = w / (2 * np.tan(fov * np.pi / 360))
