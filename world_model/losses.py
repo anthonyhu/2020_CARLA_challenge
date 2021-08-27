@@ -27,7 +27,8 @@ class SegmentationLoss(nn.Module):
             loss, _ = torch.sort(loss, dim=2, descending=True)
             loss = loss[:, :, :k]
 
-        return torch.mean(loss)
+        # Keep time dimension for visualisation
+        return torch.mean(loss, dim=[0, 2])
 
 
 class RegressionLoss(nn.Module):
@@ -61,7 +62,8 @@ class ProbabilisticLoss(nn.Module):
         )
 
         # Sum across channel and spatial dimension
-        kl_loss = torch.mean(torch.sum(kl_div, dim=(-1, -2, -3)))
+        # Average across batch dimension, keep time dimension for monitoring
+        kl_loss = torch.mean(torch.sum(kl_div, dim=(-1, -2, -3)), dim=0)
 
         return kl_loss
 

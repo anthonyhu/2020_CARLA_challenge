@@ -64,7 +64,7 @@ class WorldModelTrainer(pl.LightningModule):
         if self.config.MODEL.PROBABILISTIC.ENABLED:
             probabilistic_loss = self.compute_probabilistic_loss(output)
         else:
-            probabilistic_loss = reconstruction_loss.new_zeros(1)[0]
+            probabilistic_loss = torch.zeros_like(reconstruction_loss)
 
         losses = {
             'probabilistic': self.config.LOSSES.WEIGHT_PROBABILISTIC * probabilistic_loss,
@@ -111,22 +111,32 @@ class WorldModelTrainer(pl.LightningModule):
         loss, output = self.shared_step(batch, is_train=True, optimizer_idx=0)
         self.training_step_count += 1
 
-        for key, value in loss.items():
-            self.log('train_' + key, value)
-        if self.training_step_count % self.config.VIS_INTERVAL == 0:
-            self.visualise(batch, output, batch_idx, prefix='train')
+        self.metric_and_visualisation(batch, output, loss, batch_idx, prefix='train')
 
-        return {'loss': sum(loss.values())}
+        return {'loss': self.loss_reducing(loss)}
 
     def validation_step(self, batch, batch_idx):
         loss, output = self.shared_step(batch, is_train=False)
+
+        self.metric_and_visualisation(batch, output, loss, batch_idx, prefix='val')
+
+        return {'val_loss': self.loss_reducing(loss).item()}
+
+    def metric_and_visualisation(self, batch, output, loss, batch_idx, prefix='train'):
         for key, value in loss.items():
-            self.log('val_' + key, value)
+            for t, value_t in enumerate(value):
+                self.log(f'{prefix}_{key}_time_{t}', value_t.item())
 
-        if batch_idx == 0:
-            self.visualise(batch, output, batch_idx, prefix='val')
+        if prefix == 'train':
+            visualisation_criteria = self.training_step_count % self.config.VIS_INTERVAL == 0
+        else:
+            visualisation_criteria = batch_idx == 0
+        if visualisation_criteria:
+            self.visualise(batch, output, batch_idx, prefix=prefix)
 
-        return {'val_loss': sum(loss.values()).item()}
+    def loss_reducing(self, loss):
+        total_loss = sum([x.mean() for x in loss.values()])
+        return total_loss
 
     def shared_epoch_end(self, step_outputs, is_train):
         # log per class iou metrics

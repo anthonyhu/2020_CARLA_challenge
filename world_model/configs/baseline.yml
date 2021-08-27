@@ -1,7 +1,7 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/image_inputs'
-TAG: 'image_inputs_2gpus'
+TAG: '1gpu_kl=0.001_with_fist_prior'
 
-GPUS: [0, 1]
+GPUS: [0]
 
 BATCHSIZE: 4
 PRECISION: 32
@@ -10,6 +10,9 @@ N_WORKERS: 10
 
 SEQUENCE_LENGTH: 5
 RECEPTIVE_FIELD: 3
+
+IMAGE:
+  FOV: 90
 
 MODEL:
   ENCODER:
@@ -25,4 +28,4 @@ MODEL:
 
 LOSSES:
   WEIGHT_RECONSTRUCTION: 1.0
-  WEIGHT_PROBABILISTIC: 0.0005
+  WEIGHT_PROBABILISTIC: 0.001
