@@ -1,5 +1,5 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/image_inputs'
-TAG: '1gpu_kl=0.001_with_fist_prior'
+TAG: '1gpu_kl=0.001_without'
 
 GPUS: [0]
 

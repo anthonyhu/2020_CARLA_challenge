@@ -53,6 +53,10 @@ class RegressionLoss(nn.Module):
 
 
 class ProbabilisticLoss(nn.Module):
+    def __init__(self, remove_first_timestamp=True):
+        super().__init__()
+        self.remove_first_timestamp = remove_first_timestamp
+
     def forward(self, present_mu, present_log_sigma, future_mu, future_log_sigma):
         var_future = torch.exp(2 * future_log_sigma)
         var_present = torch.exp(2 * present_log_sigma)
@@ -65,14 +69,17 @@ class ProbabilisticLoss(nn.Module):
         # Average across batch dimension, keep time dimension for monitoring
         kl_loss = torch.mean(torch.sum(kl_div, dim=(-1, -2, -3)), dim=0)
 
-        return kl_loss
+        if self.remove_first_timestamp:
+            return kl_loss[1:]
+        else:
+            return kl_loss
 
 
 class KLBalancing(nn.Module):
     def __init__(self, alpha):
         super().__init__()
         self.alpha = alpha
-        self.loss = ProbabilisticLoss()
+        self.loss = ProbabilisticLoss(remove_first_timestamp=True)
 
     def forward(self, present_mu, present_log_sigma, future_mu, future_log_sigma):
         prior_loss = self.loss(present_mu, present_log_sigma, future_mu.detach(), future_log_sigma.detach())
