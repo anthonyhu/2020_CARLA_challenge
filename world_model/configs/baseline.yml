@@ -1,7 +1,7 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/image_inputs'
-TAG: '1gpu_kl=0.001_without'
+TAG: '2gpu_kl=0.005_without'
 
-GPUS: [0]
+GPUS: [0, 1]
 
 BATCHSIZE: 4
 PRECISION: 32
@@ -28,4 +28,4 @@ MODEL:
 
 LOSSES:
   WEIGHT_RECONSTRUCTION: 1.0
-  WEIGHT_PROBABILISTIC: 0.001
+  WEIGHT_PROBABILISTIC: 0.005
