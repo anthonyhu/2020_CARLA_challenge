@@ -72,9 +72,9 @@ class WorldModelTrainer(pl.LightningModule):
         }
 
         if not is_train:
-            seg_prediction = output['reconstruction'].detach()
+            seg_prediction = output['reconstruction'].detach()[:, self.model.receptive_field:]
             seg_prediction = torch.argmax(seg_prediction, dim=2)
-            self.metric_iou_val(seg_prediction, torch.argmax(batch['bev'], dim=2))
+            self.metric_iou_val(seg_prediction, torch.argmax(batch['bev'][:, self.model.receptive_field:], dim=2))
 
         if not self.config.MODEL.REWARD.ENABLED:
             return losses, output

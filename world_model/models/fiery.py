@@ -160,7 +160,7 @@ class Fiery(nn.Module):
         )
 
         h, sample, z_mu, z_sigma, z_hat_mu, z_hat_sigma = self.rssm(
-            input_embedding=encoded_inputs, action=batch['action'], is_train=is_train
+            input_embedding=encoded_inputs, action=batch['action'], is_train=is_train,
         )
 
         output = {
