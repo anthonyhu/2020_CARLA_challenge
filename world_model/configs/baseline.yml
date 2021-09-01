@@ -1,5 +1,5 @@
 LOG_DIR: '/home/mifs/ah2029/experiments/carla/image_inputs'
-TAG: '1gpu_kl=0.0006'
+TAG: '1gpu_kl=0.0001'
 
 GPUS: [0]
 
@@ -28,4 +28,4 @@ MODEL:
 
 LOSSES:
   WEIGHT_RECONSTRUCTION: 1.0
-  WEIGHT_PROBABILISTIC: 0.0006
+  WEIGHT_PROBABILISTIC: 0.0001
