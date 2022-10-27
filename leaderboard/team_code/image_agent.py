@@ -49,6 +49,7 @@ class ImageAgent(BaseAgent):
         super().setup(path_to_conf_file)
 
         self.converter = Converter()
+        print(path_to_conf_file)
         self.net = ImageModel.load_from_checkpoint(path_to_conf_file)
         self.net.cuda()
         self.net.eval()

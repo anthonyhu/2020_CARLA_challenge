@@ -1,11 +1,3 @@
-import os
-import sys
-sys.path.append('/home/mifs/ah2029/softwares/CARLA_0.9.10.1/PythonAPI/carla')
-sys.path.append('/home/mifs/ah2029/softwares/CARLA_0.9.10.1/PythonAPI/carla/dist/carla-0.9.10-py3.7-linux-x86_64.egg')
-sys.path.append('leaderboard')
-sys.path.append('leaderboard/team_code')
-sys.path.append('scenario_runner')
-
 from argparse import ArgumentParser, RawTextHelpFormatter
 
 from leaderboard.leaderboard_evaluator import run
@@ -51,8 +43,4 @@ if __name__ == '__main__':
                         help="Path to checkpoint used for saving statistics and resuming")
 
     arguments = parser.parse_args()
-
-    checkpoint_file = os.path.join(os.path.dirname(arguments.agent_config),
-                                   os.path.basename(arguments.routes).split('.')[0] + '.txt')
-    arguments.checkpoint = checkpoint_file
     run(arguments)
