@@ -22,11 +22,7 @@ The code in this repo is based off of [link](https://github.com/dianchen96/Learn
 
 Clone this repo with all its submodules
 
-```bash
-git clone https://github.com/bradyz/2020_CARLA_challenge.git --recursive
-```
-
-All python packages used are specified in `carla_project/requirements.txt`.
+Install conda env with `conda env create`
 
 This code uses CARLA 0.9.9 and works with CARLA 0.9.8, **0.9.10.1**.
 
@@ -68,7 +64,7 @@ If you're interested in recollecting data after changing the autopilot's driving
 First, spin up a CARLA server
 
 ```bash
-./CarlaUE4.sh -quality-level=Epic -world-port=2000 -resx=800 -resy=600 -opengl
+CUDA_VISIBLE_DEVICES=0 bash /home/anthony/softwares/CARLA_0.9.10.1/CarlaUE4.sh -quality-level=Epic -carla-rpc-port=2000
 ```
 
 then run the agent.
@@ -92,13 +88,13 @@ Go to the "files" tab, and download the model weights, named "epoch=24.ckpt", an
 Spin up a CARLA server
 
 ```bash
-./CarlaUE4.sh -quality-level=Epic -world-port=2000 -resx=800 -resy=600 -opengl
+CUDA_VISIBLE_DEVICES=0 bash /home/anthony/softwares/CARLA_0.9.10.1/CarlaUE4.sh -quality-level=Epic -carla-rpc-port=2000
 ```
 
 then run the agent.
 
 ```bash
-HAS_DISPLAY=1 python run_agent.py --agent world_model_agent.py --agent-config /data/cornucopia/ah2029/experiments/carla/baseline/21May2021at16:32:23BST_hachiban_policy_only/last.ckpt --routes leaderboard/data/routes_training/route_05.xml
+CUDA_VISIBLE_DEVICES=0 bash evaluate.sh leaderboard/data/roach_town05.xml 2000
 ```
 
 ## Training models from scratch
