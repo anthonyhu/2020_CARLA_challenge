@@ -1,4 +1,4 @@
-name: rl-carla
+name: lbc
 channels:
   - defaults
   - conda-forge
