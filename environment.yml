@@ -15,7 +15,6 @@ dependencies:
 - notebook=6.4.0
 - pandas=1.1.5
 - scikit-learn=0.24.2
-- pytorch-lightning=0.7.1
 - efficientnet-pytorch=0.7.0
 - fvcore=0.1.2.post20201122
 - pip=21.0.1
@@ -32,3 +31,4 @@ dependencies:
     - ray==1.1.0
     - xmlschema==1.6.2
     - pygame==2.0.1
+    - pytorch-lightning==0.7.1
